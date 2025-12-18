@@ -1,0 +1,139 @@
+==================================================
+📂 开始解析任务: 武器协同.dsl
+🕒 时间: Thu Dec 18 17:12:36 CST 2025
+--------------------------------------------------
+ℹ️ 识别模式: 功能模型 (Function Model)
+✅ 语法解析通过 (Zero Syntax Errors)
+
+--- [Visitor 数据提取结果] ---
+=== 解析功能模型: Link16_Control_Handover_Detailed ===
+  [发现参与者] 名称: C2_JU_A, 类型: C2_JU
+  [发现参与者] 名称: C2_JU_B, 类型: C2_JU
+  [发现参与者] 名称: Aircraft, 类型: NON_C2_JU
+  [发现参与者] 名称: Operator_A, 类型: GENERIC_PLATFORM
+  [发现参与者] 名称: Operator_B, 类型: GENERIC_PLATFORM
+
+[静态定义] 消息列表 (MESSAGES):
+  - J10.3
+  - J10.5
+  - J12.4
+  - J9.0
+  - J7.1
+  - J13.X
+
+[静态定义] 枚举集合: RC_Field_Values
+  |-- Original =0 ("Initial Request")
+  |-- Machine_Receipt =2 ("Machine Receipt")
+  |-- WILCO =3 ("Will Comply")
+  |-- HAVCO =4 ("Have Comply")
+  |-- CANTCO =6 ("Cannot Comply")
+  |-- CANTPRO =7 ("Cannot Comply - Protocol")
+
+[静态定义] 枚举集合: Request_Field_Values
+  |-- Assume_Control_Request =0 ("Assume Control Request (Not Engaging)")
+  |-- Assume_Control_Engaging =1 ("Assume Control Request (Engaging)")
+  |-- Transfer_Control_Request =2 ("Request for Transfer of Control")
+
+[静态定义] 枚举集合: CCI_Field_Values
+  |-- Control_Change_Order =0 ("Control Change Order")
+  |-- Control_Request =1 ("Control Request")
+
+[静态定义] 枚举集合: Handover_Indicator_Values
+  |-- No_Handover =0 ("No Handover in Progress")
+  |-- Handover_In_Progress =1 ("Handover in Progress")
+
+[静态定义] 枚举集合: Cancellation_Values
+  |-- Not_A_Cancellation =0 ("Not a Cancellation Message")
+  |-- Is_A_Cancellation =1 ("Is a Cancellation Message")
+
+[静态定义] 全局状态: Handover_Active (类型: BOOLEAN) 默认值 = FALSE
+
+[静态定义] 全局状态: J12_4_Sent_To_Asset (类型: BOOLEAN) 默认值 = FALSE
+
+[静态定义] 全局状态: Handover_Complete (类型: BOOLEAN) 默认值 = FALSE
+
+[解析流程] Core_Manage_Control_Handover (Manages the entire control handover workflow)
+    [触发条件] "Operator_A initiates handover"ORMESSAGE_RECEIVEDJ10.3(RequestForAssumeControl==Transfer_Control_Request)FROMC2_JU_BORMESSAGE_RECEIVEDJ9.0(Command==20)FROMOperator_BORMESSAGE_RECEIVEDJ10.5
+    [逻辑判断] IF "Operator_A initiates handover"ORMESSAGE_RECEIVEDJ10.3ORMESSAGE_RECEIVEDJ9.0
+      |-- -> 赋值操作: Handover_Active = TRUE
+      |-- -> 赋值操作: J12_4_Sent_To_Asset = FALSE
+      |--     [逻辑判断] IF "Operator_A initiates handover"
+      |-- 调用子流程: Sub_Handle_Assume_Control_Request
+    [逻辑判断] ELSE IF MESSAGE_RECEIVEDJ10.3(RequestForAssumeControl==Transfer_Control_Request)FROMC2_JU_B
+      |-- 调用子流程: Sub_Handle_Transfer_Control_Request
+    [逻辑判断] ELSE IF MESSAGE_RECEIVEDJ9.0(Command==20)
+      |-- 调用子流程: Sub_Alert_Operator
+      |-- 调用子流程: Sub_Handle_Assume_Control_Request
+    [逻辑判断] ELSE IF MESSAGE_RECEIVEDJ10.5
+      |-- 调用子流程: Sub_Process_Incoming_J10_5_Report
+
+[解析流程] Sub_SendMessage (A generic sub-procedure to send or broadcast a tactical message.)
+    (参数定义: (Sender:STRING,MessageType:STRING,Params:DICTIONARY,Mode:STRING,Recipient:STRING,ToAddress:STRING))
+    [逻辑判断] IF Mode=="SEND"
+      |--     -> 步骤: SenderSENDSMessageType(Params=Params)TORecipient
+    [逻辑判断] ELSE IF Mode=="BROADCAST_TO_ADDRESS"
+      |--     -> 步骤: SenderBROADCASTSMessageType(Params=Params)TO_ADDRESSToAddress
+    [逻辑判断] ELSE
+      |--     -> 步骤: SenderBROADCASTSMessageType(Params=Params)
+
+[解析流程] Sub_Alert_Operator (Encapsulates the atomic alert operation)
+    (参数定义: (Operator:STRING,Message:STRING))
+调用子流程: Atomic_Alert_Operator
+
+[解析流程] Sub_Handle_Assume_Control_Request (Handles the 'Request for Assume Control' sequence (a))
+    (参数定义: (Initiator:STRING,Receiver:STRING,Asset:STRING))
+调用子流程: Sub_SendMessage
+
+[解析流程] Sub_Handle_Transfer_Control_Request (Handles the 'Request for Transfer of Control' sequence (b))
+    (参数定义: (Requester:STRING,CurrentController:STRING,Asset:STRING))
+
+[解析流程] Sub_Execute_Digital_Handshake (Executes the digital handshake with the asset and network)
+    (参数定义: (ControllerA:STRING,ControllerB:STRING,Asset:STRING))
+调用子流程: Sub_SendMessage
+-> 赋值操作: J12_4_Sent_To_Asset = TRUE
+
+[解析流程] Sub_Handle_Cancellation_By_A (Handles cancellation initiated by Controller A)
+    [逻辑判断] IF Handover_Complete==FALSE
+      |-- -> 赋值操作: Handover_Active = FALSE
+      |-- 调用子流程: Atomic_Alert_Operator
+      |-- 调用子流程: Atomic_Alert_Operator
+      |--     [逻辑判断] ELSE
+      |-- 调用子流程: Atomic_Alert_Operator
+      |-- 
+[解析流程] Sub_Handle_Cancellation_By_B (Handles cancellation initiated by Controller B)
+    [逻辑判断] IF Handover_Complete==TRUE
+      |-- 调用子流程: Atomic_Alert_Operator
+      |--     [逻辑判断] ELSE
+      |--     [逻辑判断] IF J12_4_Sent_To_Asset==FALSE
+      |-- -> 赋值操作: Handover_Active = FALSE
+      |-- 调用子流程: Atomic_Alert_Operator
+      |--     [逻辑判断] ELSE
+      |-- 调用子流程: Atomic_Alert_Operator
+      |-- 调用子流程: Sub_SendMessage
+      |-- 
+[解析流程] Sub_Process_Incoming_J10_5_Report (Processes an incoming J10.5 report for duplicate control)
+    [逻辑判断] IF GET_CONTROLLER_FOR(ReferenceTN=J10_5.ReferenceTN)!=J10_5.SourceTN
+      |-- 调用子流程: Atomic_Update_Controller_For_Track
+      |-- 调用子流程: Atomic_Alert_Operator
+
+[解析流程] Atomic_Alert_Operator (Alerts a human operator)
+    (参数定义: (Operator:STRING,Message:STRING))
+    -> 步骤: C2_JU_ANOTIFYMessageTOOperator
+
+[解析流程] Atomic_Stop_J10_5_Broadcast (Ceases the periodic broadcast of J10.5 for an asset)
+    (参数定义: (Unit:STRING,Asset:STRING))
+    -> 步骤: 自然语言描述: NATURAL_LANGUAGE{INTENT"Cease periodic J10.5 transmission.";DESCRIPTION"The specified unit stops its periodic J10.5 broadcast for the given asset, finalizing the handover.";}
+
+[解析流程] Atomic_Get_Controller_For_Track (Gets the current controller for a given track)
+    (参数定义: (TN:INTEGER))
+    -> 步骤: 自然语言描述: NATURAL_LANGUAGE{INTENT"Query local track database for current controller.";DESCRIPTION"The system retrieves the currently assigned controller's TN for the given reference track TN from its local database.";}
+
+[解析流程] Atomic_Update_Controller_For_Track (Updates the controller for a given track)
+    (参数定义: (TN:INTEGER,NewController:STRING))
+    -> 步骤: 自然语言描述: NATURAL_LANGUAGE{INTENT"Update the controller in the local track database.";DESCRIPTION"The system updates its local database, assigning the NewController as the controlling C2 JU for the specified track TN.";}
+------------------------------
+
+🎉 所有任务完成！
+   - 可视化图: E:\lht\模型转换\DSLParser\output\武器协同.svg
+   - 详细日志: output/武器协同解析日志.txt
+

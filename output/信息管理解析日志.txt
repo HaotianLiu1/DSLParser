@@ -1,0 +1,247 @@
+==================================================
+📂 开始解析任务: 信息管理.dsl
+🕒 时间: Thu Dec 18 15:43:58 CST 2025
+--------------------------------------------------
+ℹ️ 识别模式: 功能模型 (Function Model)
+✅ 语法解析通过 (Zero Syntax Errors)
+
+--- [Visitor 数据提取结果] ---
+=== 解析功能模型: Link16_Difference_Report_Optimized_Commented ===
+  [发现参与者] 名称: My_C2_Unit, 类型: C2_JU
+  [发现参与者] 名称: Reporting_Unit, 类型: GENERIC_PLATFORM
+  [发现参与者] 名称: Operator, 类型: NON_IU
+  [发现参与者] 名称: System_Log, 类型: NON_IU
+
+[静态定义] 消息列表 (MESSAGES):
+  - J2.2
+  - J3.2
+  - J7.0
+  - J2.X
+  - J3.X
+
+[静态定义] 枚举集合: Identity_Values
+  |-- PENDING =0 ("Pending")
+  |-- UNKNOWN =1 ("Unknown")
+  |-- ASSUMED_FRIEND =2 ("Assumed Friend")
+  |-- FRIEND =3 ("Friend")
+  |-- NEUTRAL =4 ("Neutral")
+  |-- SUSPECT =5 ("Suspect")
+  |-- HOSTILE =6 ("Hostile")
+
+[静态定义] 枚举集合: EC_Values
+  |-- SPACE =1 ("Space")
+  |-- AIR =2 ("Air")
+  |-- SURF =3 ("Surface")
+  |-- SUB =4 ("Subsurface")
+  |-- LAND =5 ("Land")
+  |-- LAND_PT =6 ("Land Point")
+  |-- EW_FIX =7 ("EW Fix")
+  |-- EW_AOP =8 ("EW Area of Probability")
+  |-- ASW_RB =9 ("ASW Red/Black")
+  |-- ASW_POINTS =10 ("ASW Points")
+
+[静态定义] 枚举集合: TN_Change_Action
+  |-- S =0 ("Same TN")
+  |-- N =1 ("New TN")
+  |-- X =2 ("Illegal")
+  |-- NOT_APPLICABLE =3 ("N/A")
+  |-- N_BRACKET_3 =4 ("N(3)")
+  |-- BRACKET_2 =5 ("(2)")
+
+[静态定义] 枚举集合: ID_Resolution_Action
+  |-- NO_ACTION =0 ("No Action")
+  |-- ALERT =1 ("Alert Operator")
+  |-- ACCEPT =2 ("Auto Accept")
+  |-- REJECT =3 ("Auto Reject")
+  |-- ALERT_AUTO =4 ("Alert and optionally Auto Accept (1*)")
+
+[静态定义] 全局状态: System_Config_IDI1_Action (类型: INTEGER) 默认值 = 1
+
+[静态定义] 映射表: EC_Change_Rules
+
+[静态定义] 映射表: ID_Resolution_Rules
+
+[解析流程] Core_Process_Incoming_Data_Conflict (Process Incoming Data Conflict)
+    [触发条件] MESSAGE_RECEIVEDJ3.XORMESSAGE_RECEIVEDJ7.0ORMESSAGE_RECEIVEDJ2.X
+    [逻辑判断] IF Context.Is_From_PPLI_Report==TRUE
+      |-- 调用子流程: Sub_Handle_PPLI_Update
+      |-- -> 赋值操作: Local_Track = GET_LOCAL_TRACK(TN=Context.Current_TN)
+    [逻辑判断] IF Local_Track==NULL
+      |-- 调用子流程: Sub_Log_To_System
+      |--     [逻辑判断] IF Context.Remote_EC!=Local_Track.Environment
+      |-- 调用子流程: Sub_Handle_EC_Conflict
+      |--     [逻辑判断] ELSE IF Context.Remote_Exercise_Indicator!=Local_Track.Exercise_Indicator
+      |-- 调用子流程: Sub_Handle_Exercise_Indicator_Conflict
+    [逻辑判断] ELSE IF Context.Remote_ID!=Local_Track.Identity
+      |-- 调用子流程: Sub_Handle_ID_Conflict
+    [逻辑判断] ELSE
+      |-- 
+[解析流程] Sub_Handle_PPLI_Update (Handle PPLI Update)
+    [逻辑判断] IF Context.Remote_EC!=GET_LOCAL_EC(TN=Context.Current_TN)
+      |-- 调用子流程: Sub_Handle_EC_Conflict
+-> 赋值操作: PPLI_ID_Indicator = Context.Remote_Message_Data.PPLI_Identity_Indicator
+    [逻辑判断] IF PPLI_ID_Indicator==1ANDContext.Remote_ID==Identity_Values.FRIENDANDGET_LOCAL_ID(TN=Context.Current_TN)!=Identity_Values.HOSTILE
+      |-- 调用子流程: Atomic_Log_To_System
+      |-- 调用子流程: Atomic_Set_Track_Identity
+      |-- 调用子流程: Sub_Update_Associated_Data
+      |-- 调用子流程: Sub_Report_Local_ID_Change
+    [逻辑判断] ELSE
+      |-- 调用子流程: Atomic_Log_To_System
+      |-- 调用子流程: Sub_Handle_ID_Conflict
+
+[解析流程] Sub_Handle_EC_Conflict (Handle E/C Conflict)
+    (参数定义: (base_rule_override:STRING))
+-> 赋值操作: Local_EC = GET_LOCAL_EC(TN=Context.Current_TN)
+    [逻辑判断] IF base_rule_override==""
+      |-- -> 赋值操作: base_rule = EC_Change_Rules(Local=Local_EC,Remote=Context.Remote_EC)
+    [逻辑判断] ELSE
+      |--     [逻辑判断] IF base_rule_override=="N"
+      |-- -> 赋值操作: base_rule = TN_Change_Action.N
+    [逻辑判断] ELSE IF base_rule_override=="S"
+      |-- -> 赋值操作: base_rule = TN_Change_Action.S
+    [逻辑判断] ELSE IF base_rule_override=="X"
+      |-- -> 赋值操作: base_rule = TN_Change_Action.X
+    [逻辑判断] ELSE
+      |--     -> 步骤: 描述: "ERROR: Invalid string value received in base_rule_override."
+      |--     [逻辑判断] IF base_rule==TN_Change_Action.S
+      |-- 调用子流程: Atomic_Alert_Operator
+      |-- 调用子流程: Sub_Report_Local_EC_Change
+    [逻辑判断] ELSE IF base_rule==TN_Change_Action.N
+      |-- 调用子流程: Atomic_Alert_Operator
+      |--     [逻辑判断] IF My_C2_Unit.HAS_R2_FOR(TN=Context.Current_TN)==TRUE
+      |-- 调用子流程: Link16_Control_Handover_Detailed.Sub_SendMessage
+      |-- -> 赋值操作: New_TN = GENERATE_NEW_TN
+      |-- 调用子流程: Atomic_Log_To_System
+    [逻辑判断] ELSE
+      |-- 调用子流程: Link16_Control_Handover_Detailed.Sub_SendMessage
+    [逻辑判断] ELSE IF base_rule==TN_Change_Action.N_BRACKET_3
+      |-- 调用子流程: Atomic_Alert_Operator
+      |--     [逻辑判断] IF GET_ASW_POINT_TYPE(Track=GET_LOCAL_TRACK(TN=Context.Current_TN))IN(1,2,4,5,12)
+      |-- 调用子流程: Sub_Handle_EC_Conflict
+    [逻辑判断] ELSE
+      |-- 调用子流程: Sub_Handle_EC_Conflict
+    [逻辑判断] ELSE IF base_rule==TN_Change_Action.BRACKET_2
+      |-- 调用子流程: Atomic_Alert_Operator
+      |--     [逻辑判断] IF GET_NUMBER_OF_FIXES_FOR_AOP(Data=Context.Remote_Message_Data)==1
+      |-- 调用子流程: Sub_Handle_EC_Conflict
+    [逻辑判断] ELSE
+      |-- 调用子流程: Sub_Handle_EC_Conflict
+    [逻辑判断] ELSE
+      |-- 调用子流程: Atomic_Alert_Operator
+
+[解析流程] Sub_Report_Local_EC_Change (Report Local E/C Change)
+    (参数定义: (New_EC:STRING))
+    [逻辑判断] IF My_C2_Unit.HAS_R2_FOR(TN=Context.Current_TN)==TRUE
+      |-- -> 赋值操作: Converted_EC = EC_Values.FromString(Value=New_EC)
+      |-- 调用子流程: Atomic_Set_R2_Next_Report_Data
+    [逻辑判断] ELSE
+      |-- 调用子流程: Link16_Control_Handover_Detailed.Sub_SendMessage
+
+[解析流程] Sub_Handle_Exercise_Indicator_Conflict (Handle Exercise Indicator Conflict)
+调用子流程: Atomic_Alert_Operator
+
+[解析流程] Sub_Handle_ID_Conflict (Handle Identity (ID) Conflict)
+    [逻辑判断] IF My_C2_Unit.IS_CONTROLLING_UNIT_FOR(TN=Context.Current_TN)==TRUE
+      |-- 调用子流程: Atomic_Alert_Operator
+      |-- 调用子流程: Link16_Control_Handover_Detailed.Sub_SendMessage
+      |--     [逻辑判断] IF Context.Is_From_J70_Report==TRUE
+      |--     [逻辑判断] IF Context.Remote_CUI_Flag==TRUE
+      |-- 调用子流程: Atomic_Alert_Operator
+      |-- -> 赋值操作: Converted_ID = Identity_Values.FromValue(Value=Context.Remote_ID)
+      |-- 调用子流程: Atomic_Set_Track_Identity
+      |-- 调用子流程: Sub_Update_Associated_Data
+      |-- 调用子流程: Sub_Report_Local_ID_Change
+    [逻辑判断] ELSE
+      |-- -> 赋值操作: id_action = ID_Resolution_Rules(Local=GET_LOCAL_ID(TN=Context.Current_TN),Value=Context.Remote_ID)
+      |-- 调用子流程: Sub_Resolve_ID_Action_By_Role
+    [逻辑判断] ELSE IF Context.Is_From_J3X_Report==TRUE
+      |--     [逻辑判断] IF Context.Remote_IDI_Flag==FALSE
+      |-- -> 赋值操作: id_action = ID_Resolution_Rules(Local=GET_LOCAL_ID(TN=Context.Current_TN),Value=Context.Remote_ID)
+      |-- 调用子流程: Sub_Resolve_ID_Action_By_Role
+    [逻辑判断] ELSE
+      |--     [逻辑判断] IF System_Config_IDI1_Action==1
+      |-- -> 赋值操作: id_action = ID_Resolution_Rules(Local=GET_LOCAL_ID(TN=Context.Current_TN),Value=Context.Remote_ID)
+      |-- 调用子流程: Sub_Resolve_ID_Action_By_Role
+    [逻辑判断] ELSE
+      |-- 调用子流程: Atomic_Alert_Operator
+
+[解析流程] Sub_Resolve_ID_Action_By_Role (Resolve ID Action Based on Unit Role)
+    (参数定义: (action:INTEGER))
+    [逻辑判断] IF My_C2_Unit.HAS_R2_FOR(TN=Context.Current_TN)==TRUE
+      |--     [逻辑判断] IF action==ID_Resolution_Action.ACCEPTORaction==ID_Resolution_Action.ALERT_AUTO
+      |-- -> 赋值操作: Converted_ID = Identity_Values.FromValue(Value=Context.Remote_ID)
+      |-- 调用子流程: Atomic_Set_Track_Identity
+      |-- 调用子流程: Sub_Update_Associated_Data
+      |-- 调用子流程: Sub_Report_Local_ID_Change
+      |-- 调用子流程: Atomic_Log_To_System
+    [逻辑判断] ELSE IF action==ID_Resolution_Action.REJECT
+      |-- 调用子流程: Atomic_Log_To_System
+    [逻辑判断] ELSE
+      |-- 调用子流程: Atomic_Alert_Operator
+      |-- 调用子流程: Atomic_Set_R2_Next_Report_Data
+    [逻辑判断] ELSE
+      |--     [逻辑判断] IF action==ID_Resolution_Action.ACCEPTORaction==ID_Resolution_Action.ALERT_AUTO
+      |-- -> 赋值操作: Converted_ID = Identity_Values.FromValue(Value=Context.Remote_ID)
+      |-- 调用子流程: Atomic_Set_Track_Identity
+      |-- 调用子流程: Sub_Update_Associated_Data
+      |-- 调用子流程: Sub_Report_Local_ID_Change
+      |-- 调用子流程: Atomic_Alert_Operator
+    [逻辑判断] ELSE IF action==ID_Resolution_Action.REJECT
+      |-- 调用子流程: Atomic_Alert_Operator
+      |-- 调用子流程: Link16_Control_Handover_Detailed.Sub_SendMessage
+    [逻辑判断] ELSE
+      |-- 调用子流程: Atomic_Alert_Operator
+
+[解析流程] Sub_Update_Associated_Data (Update Associated Data After ID Change)
+    (参数定义: (TN:INTEGER))
+调用子流程: Atomic_Log_To_System
+-> 赋值操作: Remote_Platform = Context.Remote_Message_Data.Platform
+-> 赋值操作: Local_Platform = GET_LOCAL_PLATFORM(ReferenceTN=TN)
+    [逻辑判断] IF Remote_Platform=="No_Statement"ANDLocal_Platform!="No_Statement"
+      |-- 调用子流程: Atomic_Log_To_System
+    [逻辑判断] ELSE IF Local_PlatformIN("Tanker","Tanker_Boom")ANDNOT(Remote_PlatformIN("Tanker","Tanker_Boom"))
+      |-- 调用子流程: Atomic_Alert_Operator
+      |-- 调用子流程: Atomic_Update_Track_Associated_Data
+      |-- 调用子流程: Atomic_Log_To_System
+    [逻辑判断] ELSE
+      |-- 调用子流程: Atomic_Update_Track_Associated_Data
+      |-- 调用子流程: Atomic_Log_To_System
+
+[解析流程] Sub_Report_Local_ID_Change (Report Local ID Change)
+    (参数定义: (TN:INTEGER,New_ID:INTEGER))
+    [逻辑判断] IF My_C2_Unit.HAS_R2_FOR(ReferenceTN=TN)==TRUE
+      |-- 调用子流程: Atomic_Set_R2_Next_Report_Data
+    [逻辑判断] ELSE
+      |-- -> 赋值操作: is_cu = My_C2_Unit.IS_CONTROLLING_UNIT_FOR(ReferenceTN=TN)
+      |-- 调用子流程: Link16_Control_Handover_Detailed.Sub_SendMessage
+
+[解析流程] Sub_Log_To_System (Log message to system)
+    (参数定义: (Message:STRING))
+调用子流程: Atomic_Log_To_System
+
+[解析流程] Atomic_Alert_Operator (Alert Operator)
+    (参数定义: (Recipient:STRING,Message:STRING))
+    -> 步骤: My_C2_UnitNOTIFYMessageTORecipient
+
+[解析流程] Atomic_Log_To_System (Log to System)
+    (参数定义: (Message:STRING))
+    -> 步骤: My_C2_UnitNOTIFYMessageTOSystem_Log
+
+[解析流程] Atomic_Set_Track_Identity (Set Track's Identity Field)
+    (参数定义: (TN:INTEGER,New_ID:INTEGER))
+-> 赋值操作: GET_LOCAL_TRACK(ReferenceTN=TN).Identity = New_ID
+
+[解析流程] Atomic_Update_Track_Associated_Data (Update Track's Associated Data)
+    (参数定义: (TN:INTEGER))
+-> 赋值操作: GET_LOCAL_TRACK(ReferenceTN=TN).Platform = Context.Remote_Message_Data.Platform
+-> 赋值操作: GET_LOCAL_TRACK(ReferenceTN=TN).Activity = Context.Remote_Message_Data.Activity
+
+[解析流程] Atomic_Set_R2_Next_Report_Data (Set Data for Next R2 Surveillance Report)
+    (参数定义: (TN:INTEGER,Identity:INTEGER,Environment:INTEGER,IdentityDifferenceIndicator:INTEGER))
+    -> 步骤: 自然语言描述: NATURAL_LANGUAGE{INTENT"Queue data update for next R2 report";DESCRIPTION"This unit, as R2 for the track, will include the specified updated data (Identity, E/C, and/or IDI flag) in its next J3.X surveillance transmission for that TN.";}
+------------------------------
+
+🎉 所有任务完成！
+   - 可视化图: E:\lht\模型转换\DSLParser\output\信息管理.svg
+   - 详细日志: output/信息管理解析日志.txt
+

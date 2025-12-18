@@ -1,0 +1,63 @@
+==================================================
+📂 开始解析任务: 平台定位与识别.dsl
+🕒 时间: Thu Dec 18 16:07:13 CST 2025
+--------------------------------------------------
+ℹ️ 识别模式: 功能模型 (Function Model)
+✅ 语法解析通过 (Zero Syntax Errors)
+
+--- [Visitor 数据提取结果] ---
+=== 解析功能模型: PPLI_Location_And_Status_Maintenance ===
+  [发现参与者] 名称: C2_JU_Monitor, 类型: C2_JU
+  [发现参与者] 名称: Reporting_JU, 类型: NON_C2_JU
+
+[静态定义] 消息列表 (MESSAGES):
+  - J2.X
+  - J2.0
+
+[静态定义] 全局状态: Is_JU_Mobile (类型: BOOLEAN) 默认值 = TRUE
+
+[静态定义] 全局状态: Is_JU_Antenna_Displaced (类型: BOOLEAN) 默认值 = FALSE
+
+[静态定义] 全局状态: Monitored_JU_Status (类型: ENUM{ACTIVE=1,INACTIVE=0}) 默认值 = ACTIVE
+
+[解析流程] Atomic_Enrich_PPLI_With_Motion (Enriches a PPLI message with motion data.)
+    (参数定义: ())
+    -> 步骤: 自然语言描述: NATURAL_LANGUAGE{INTENT"Enrich PPLI with motion data.";ACTORSReporting_JU;DATA_CONTEXT"Internal navigation system data (course, speed).";DESCRIPTION"The mobile JU shall include its current course and speed in the J2.X message. The position reported is extrapolated to the time of transmission.";}
+
+[解析流程] Atomic_Report_Displaced_Position (Reports the actual unit position for a displaced antenna.)
+    (参数定义: ())
+    -> 步骤: 自然语言描述: NATURAL_LANGUAGE{INTENT"Report actual unit position for displaced antenna.";ACTORSReporting_JU;DATA_CONTEXT"J2.X message content and Displaced Position continuation word.";DESCRIPTION"Set the Displaced Position Indicator in the J2.X message and transmit the applicable J2 Displaced Position continuation word to indicate the JU's actual location.";}
+
+[解析流程] Atomic_Update_Track_File (Updates the track file for a given unit to a new status.)
+    (参数定义: (unit:STRING,status:STRING))
+    -> 步骤: 自然语言描述: NATURAL_LANGUAGE{INTENT"Update the internal track file status for a monitored unit.";ACTORSC2_JU_Monitor;DESCRIPTION"The C2_JU_Monitor updates its internal track database, marking the specified unit with the new status (e.g., 'ACTIVE', 'INACTIVE').";}
+
+[解析流程] Sub_JU_Periodic_Reporting (Manages the continuous, periodic transmission of PPLI messages by a JU.)
+    (参数定义: ())
+
+[解析流程] Sub_Compose_And_Transmit_JU_PPLI (Composes the full PPLI message based on unit status and transmits it.)
+    (参数定义: ())
+调用子流程: Link16_Control_Handover_Detailed.Sub_SendMessage
+    [逻辑判断] IF Is_JU_Mobile==TRUE
+      |-- 调用子流程: Atomic_Enrich_PPLI_With_Motion
+    [逻辑判断] IF Is_JU_Antenna_Displaced==TRUE
+      |-- 调用子流程: Atomic_Report_Displaced_Position
+
+[解析流程] Sub_C2JU_Continuous_Monitoring (Manages the continuous monitoring of a JU's PPLI reports.)
+    (参数定义: ())
+
+[解析流程] Sub_Handle_PPLI_Timeout (Handles the decision-making process when a PPLI timeout occurs.)
+    (参数定义: ())
+-> 赋值操作: Monitored_JU_Status = INACTIVE
+调用子流程: Atomic_Update_Track_File
+    -> 步骤: C2_JU_MonitorNOTIFY"Unit has been marked as INACTIVE due to PPLI timeout."TOOperator
+
+[解析流程] Core_PPLI_Network_Operation (Initiates and orchestrates the parallel PPLI reporting and monitoring processes.)
+    (参数定义: ())
+    [触发条件] "Network Entry Complete"
+------------------------------
+
+🎉 所有任务完成！
+   - 可视化图: E:\lht\模型转换\DSLParser\output\平台定位与识别.svg
+   - 详细日志: output/平台定位与识别解析日志.txt
+

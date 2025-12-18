@@ -1,0 +1,143 @@
+==================================================
+📂 开始解析任务: 平台状态.dsl
+🕒 时间: Thu Dec 18 16:32:28 CST 2025
+--------------------------------------------------
+ℹ️ 识别模式: 功能模型 (Function Model)
+✅ 语法解析通过 (Zero Syntax Errors)
+
+--- [Visitor 数据提取结果] ---
+=== 解析功能模型: Link16_Platform_System_Status ===
+  [发现参与者] 名称: Own_Unit, 类型: C2_JU
+  [发现参与者] 名称: C2_JU_A, 类型: C2_JU
+  [发现参与者] 名称: C2_JU_B, 类型: C2_JU
+  [发现参与者] 名称: Reporting_JU, 类型: GENERIC_PLATFORM
+  [发现参与者] 名称: Controlled_Unit, 类型: GENERIC_PLATFORM
+  [发现参与者] 名称: Receiving_JU, 类型: GENERIC_PLATFORM
+  [发现参与者] 名称: Operator_A, 类型: GENERIC_PLATFORM
+  [发现参与者] 名称: Operator, 类型: NON_IU
+  [发现参与者] 名称: System_Log, 类型: NON_IU
+
+[静态定义] 消息列表 (MESSAGES):
+  - J13.X
+  - J7.1
+  - J10.5
+
+[静态定义] 枚举集合: J7_1_Action
+  |-- DataUpdateRequestByTN =1 ("Data Update Request by TN")
+
+[静态定义] 枚举集合: J13_Stores_Type
+  |-- NoStatement =0 ("No Statement")
+
+[静态定义] 枚举集合: J13_Stores_Number
+  |-- NoStatement =63 ("No Statement")
+
+[静态定义] 全局状态: Unit_Control_Map (类型: DICTIONARY)
+
+[静态定义] 全局状态: Unit_Status_Cache (类型: DICTIONARY)
+
+[静态定义] 全局状态: Proxy_Report_Status (类型: DICTIONARY)
+
+[解析流程] Core_Manage_Platform_System_Status (Manages all scenarios (reporting, requesting, monitoring, and receiving) for platform status.)
+    [触发条件] "JU Enters Network"OR"JU Status Significant Change"OR"Periodic Status Report Timer Expired"ORMESSAGE_RECEIVEDJ7.1FROMC2_JU_AOR"Status_Data_Required"OR"Control_Assumed"ORMESSAGE_RECEIVEDJ13.XFROMReporting_JU
+    [逻辑判断] IF "JU Enters Network"OR"JU Status Significant Change"OR"Periodic Status Report Timer Expired"ORMESSAGE_RECEIVEDJ7.1(Reference_TN==Reporting_JU.TN)FROMC2_JU_A
+      |--     [逻辑判断] IF "Trigger was RECEIVED J7.1"AND(Reporting_JU.Type!="C2_JU")
+      |--     -> 步骤: 描述: "J7.1 request received, but unit is not C2. Ignoring trigger."
+      |--       |-- -> 赋值操作: My_Status_Data = "Get_Own_Platform_Status()"
+      |--     -> 步骤: 描述: "Broadcasting own J13 status."
+      |-- 调用子流程: Link16_Control_Handover_Detailed.Sub_SendMessage
+    [逻辑判断] ELSE IF "Status_Data_Required"
+      |-- -> 赋值操作: Req_Type = "Get_Requirement_Type_From_Event()"
+      |-- -> 赋值操作: Req_TN = "Get_Requirement_TN_From_Event()"
+      |--     [逻辑判断] IF Req_Type=="Controlled_Air_Track"
+      |-- 调用子流程: Sub_Request_Controlled_Unit_Status
+    [逻辑判断] ELSE IF Req_Type=="C2_JU_Itself"
+      |-- -> 赋值操作: Target_C2_Actor = "Get_Actor_By_TN(Req_TN)"
+      |-- 调用子流程: Sub_Request_C2_Unit_Status
+    [逻辑判断] ELSE
+      |--     -> 步骤: 描述: "Invalid requirement type."
+      |--     [逻辑判断] ELSE IF "Control_Assumed"
+      |-- -> 赋值操作: Subject_JU = "Get_Controlled_Unit_From_Event()"
+      |--     [逻辑判断] IF Subject_JU.Reports_Own_Status==FALSEOR"Subject_JU.Is_In_Radio_Silence == TRUE"
+      |--     -> 步骤: 描述: "Scenario 3A/C: Unit not self-reporting or in silence. Starting proxy reporting."
+      |-- 调用子流程: Sub_Manage_Proxy_Reporting
+      |--     [逻辑判断] ELSE
+      |--     -> 步骤: 描述: "Scenario 3B/C: Unit is self-reporting. Starting monitoring watchdog."
+      |-- -> 赋值操作: Watchdog_Timer_ID = "Generate_Timer_ID(Subject_JU.TN)"
+      |-- -> 赋值操作: Update_Period = "Get_Expected_J13_Update_Period()"
+      |--       |--     [逻辑判断] ELSE IF MESSAGE_RECEIVEDJ13.XFROMReporting_JU
+      |-- -> 赋值操作: Received_Msg_Data = "Extract_Message_Data()"
+      |-- 调用子流程: Sub_Process_Received_J13_Status
+
+[解析流程] Sub_Request_Controlled_Unit_Status (Handles Scenario 2A: Requesting status of a controlled air track from its controller.)
+    (参数定义: (Requester:STRING,Target_Controlled_TN:INTEGER))
+-> 赋值操作: Controller_TN = Unit_Control_Map.get(TN=Target_Controlled_TN)
+    [逻辑判断] IF Controller_TN==NULL
+      |--     -> 步骤: 描述: "Log error: Cannot request status, controller for TN is unknown."
+      |-- 调用子流程: Atomic_Alert_Operator
+      |-- -> 赋值操作: C2_JU_B = "Get_Actor_By_TN(Controller_TN)"
+-> 赋值操作: Msg_Params = {DataUpdateRequestAction=J7_1_Action.DataUpdateRequestByTN,Reference_TN=Target_Controlled_TN}
+调用子流程: Link16_Control_Handover_Detailed.Sub_SendMessage
+
+[解析流程] Sub_Request_C2_Unit_Status (Handles Scenario 2B: Requesting status of another C2 JU itself.)
+    (参数定义: (Requester:STRING,Target_C2_JU:STRING))
+-> 赋值操作: Msg_Params = {DataUpdateRequestAction=J7_1_Action.DataUpdateRequestByTN,Reference_TN=Target_C2_JU.TN}
+调用子流程: Link16_Control_Handover_Detailed.Sub_SendMessage
+
+[解析流程] Sub_Manage_Proxy_Reporting (Handles Scenario 3 (Cases A, B, or C Action): C2 JU starts and maintains periodic proxy reporting.)
+    (参数定义: (Controller:STRING,Subject_JU:STRING,Reason:STRING))
+调用子流程: Proxy_Report_Status.set
+    -> 步骤: 描述: "Proxy reporting loop starting for unit."
+-> 赋值操作: Initial_Status_Data = "Get_Local_Data_For_Unit(Subject_JU)"
+调用子流程: Link16_Control_Handover_Detailed.Sub_SendMessage
+
+[解析流程] Sub_Stop_Proxy_Reporting (Stops the proxy reporting for a specific unit.)
+    (参数定义: (Controller:STRING,Subject_JU:STRING))
+调用子流程: Proxy_Report_Status.set
+    -> 步骤: 描述: "C2 JU shall cease its reporting."
+
+[解析流程] Sub_Process_Received_J13_Status (Handles Rule 1: Data conflict resolution for incoming J13 messages.)
+    (参数定义: (Receiver:STRING,Sender:STRING,Received_Msg:DICTIONARY))
+-> 赋值操作: Target_TN = Received_Msg.Reference_TN
+-> 赋值操作: New_Data = Received_Msg.Status_Data
+-> 赋值操作: New_Priority = 99
+    [逻辑判断] IF Sender.TN==Target_TN
+      |-- -> 赋值操作: New_Priority = 1
+    [逻辑判断] ELSE IF Unit_Control_Map.get(TN=Target_TN)==Sender.TN
+      |-- -> 赋值操作: New_Priority = 2
+-> 赋值操作: Current_Entry = Unit_Status_Cache.get(TN=Target_TN)
+    [逻辑判断] IF Current_Entry==NULLORNew_Priority<=Current_Entry.Priority
+      |--     -> 步骤: 描述: "Accepting new J13 data based on priority rules."
+      |-- 调用子流程: Atomic_Update_Status_Cache
+    [逻辑判断] ELSE
+      |--     -> 步骤: 描述: "Discarding new J13 data; existing data has higher priority."
+      |-- 
+[解析流程] Rule_J13_Voice_Channel_Content (Describes Rule 2: Content specification for J13 Voice Group A and B channels.)
+    (参数定义: ())
+    -> 步骤: 描述: "When populating J13 Platform and System Status messages, the Voice Group A and B Channels fields SHALL be the channels on which the Reference TN (the unit being reported on) is operating."
+
+[解析流程] Rule_Interpret_J13_Stores (Describes Rule 3: Interpretation logic for J13.2C2 and J13.2C7 stores data.)
+    (参数定义: (Type_of_Stores:INTEGER,Number_of_Stores:INTEGER))
+    [逻辑判断] IF Type_of_Stores!=J13_Stores_Type.NoStatementANDNumber_of_Stores!=J13_Stores_Number.NoStatement
+      |--     -> 步骤: 描述: "INTERPRETATION: Reports the aircraft's current specific onboard inventory (0 to 62 units) of that Type of Stores."
+    [逻辑判断] ELSE IF Type_of_Stores!=J13_Stores_Type.NoStatementANDNumber_of_Stores==J13_Stores_Number.NoStatement
+      |--     -> 步骤: 描述: "INTERPRETATION: That Type of Stores is currently carried, but no data is reported about the number."
+    [逻辑判断] ELSE IF Type_of_Stores==J13_Stores_Type.NoStatementANDNumber_of_Stores!=J13_Stores_Number.NoStatement
+      |--     -> 步骤: 描述: "INTERPRETATION: Reports the specific onboard inventory of an unspecified type of weapon."
+    [逻辑判断] ELSE
+      |--     -> 步骤: 描述: "INTERPRETATION: No data is reported."
+
+[解析流程] Atomic_Update_Status_Cache (Updates the local status cache for a specific track.)
+    (参数定义: (Target_TN:INTEGER,New_Data:DICTIONARY,Source_TN:INTEGER,Priority:INTEGER))
+-> 赋值操作: Cache_Entry = {StatusData=New_Data,Source_TN=Source_TN,Priority=Priority}
+调用子流程: Unit_Status_Cache.set
+    -> 步骤: 描述: "Notify local systems that track status has been updated."
+
+[解析流程] Atomic_Alert_Operator (Sends an alert to the operator of a specific actor/system.)
+    (参数定义: (Recipient:STRING,Message:STRING))
+    -> 步骤: Own_UnitNOTIFYMessageTORecipient
+------------------------------
+
+🎉 所有任务完成！
+   - 可视化图: E:\lht\模型转换\DSLParser\output\平台状态.svg
+   - 详细日志: output/平台状态解析日志.txt
+

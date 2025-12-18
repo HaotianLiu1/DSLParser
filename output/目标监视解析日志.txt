@@ -1,0 +1,199 @@
+==================================================
+📂 开始解析任务: 目标监视.dsl
+🕒 时间: Thu Dec 18 17:27:25 CST 2025
+--------------------------------------------------
+ℹ️ 识别模式: 功能模型 (Function Model)
+✅ 语法解析通过 (Zero Syntax Errors)
+
+--- [Visitor 数据提取结果] ---
+=== 解析功能模型: Track_Correlation_And_Decorrelation ===
+  [发现参与者] 名称: Own_Unit, 类型: C2_JU
+  [发现参与者] 名称: Remote_Unit, 类型: C2_JU
+  [发现参与者] 名称: Operator, 类型: NON_IU
+
+[静态定义] 消息列表 (MESSAGES):
+  - J2.0
+  - J2.2
+  - J2.3
+  - J3.2
+  - J3.3
+  - J7.0
+  - J7.2
+  - J7.4
+  - J9.0
+  - J10.2
+  - J10.3
+  - J10.5
+  - J10.6
+  - J12.0
+  - J12.5
+  - J12.6
+
+[静态定义] 全局状态: TentativeCorrelationFlag (类型: BOOLEAN) 默认值 = FALSE
+
+[静态定义] 全局状态: DroppedTN_AwaitingAck (类型: BOOLEAN) 默认值 = FALSE
+
+[静态定义] 全局状态: CorrelationRetryLockout (类型: BOOLEAN) 默认值 = FALSE
+
+[静态定义] 全局状态: DecorrelationPendingFlag (类型: BOOLEAN) 默认值 = FALSE
+
+[静态定义] 全局状态: CorrelationExecuted (类型: BOOLEAN) 默认值 = FALSE
+
+[静态定义] 全局状态: DroppedTN (类型: INTEGER) 默认值 = 0
+
+[静态定义] 全局状态: RetainedTN (类型: INTEGER) 默认值 = 0
+
+[静态定义] 全局状态: PhysicalTestPassed (类型: BOOLEAN) 默认值 = FALSE
+
+[静态定义] 全局状态: Generated_New_TN (类型: INTEGER) 默认值 = 0
+
+[静态定义] 全局状态: MatchedRemoteTN (类型: INTEGER) 默认值 = 0
+
+[静态定义] 全局状态: TentativeTrackTN (类型: INTEGER) 默认值 = 0
+
+[静态定义] 全局状态: HasProhibitions (类型: BOOLEAN) 默认值 = FALSE
+
+[静态定义] 全局状态: HasRestrictions (类型: BOOLEAN) 默认值 = FALSE
+
+[解析流程] Core_TrackCorrelation (The top-level process for handling all track correlation activities.)
+    [触发条件] MESSAGE_RECEIVEDJ3.2FROMRemote_UnitORMESSAGE_RECEIVEDJ3.3FROMRemote_UnitORMESSAGE_RECEIVEDJ2.XFROMRemote_UnitOR"Own_Unit prepares to transmit local track"OR"Operator requests manual correlation"
+    [逻辑判断] IF "Trigger is Operator manual request"
+      |-- 调用子流程: Sub_Handle_Manual_Correlation
+    [逻辑判断] ELSE IF "Trigger is RECEIVES J3.2"OR"Trigger is RECEIVES J3.3"OR"Trigger is RECEIVES J2.X"
+      |-- 调用子流程: Sub_Manage_Automatic_Correlation_Process
+    [逻辑判断] ELSE IF "Trigger is Own_Unit prepares to transmit local track"
+      |-- 调用子流程: Sub_Manage_Automatic_Correlation_Process
+      |--     [逻辑判断] IF CorrelationExecuted==FALSE
+      |-- 调用子流程: Link16_Control_Handover_Detailed.Sub_SendMessage
+    [逻辑判断] ELSE
+      |-- 
+[解析流程] Core_TrackDecorrelation (The top-level process for handling all track decorrelation activities.)
+    [触发条件] MESSAGE_RECEIVEDJ2.X(IsCommonLocalTrack==TRUE)FROMRemote_UnitORMESSAGE_RECEIVEDJ3.X(IsCommonLocalTrack==TRUE)FROMRemote_UnitOR"Operator requests manual decorrelation"
+    [逻辑判断] IF "Trigger is Operator manual request"
+      |-- 调用子流程: Sub_ExecuteDecorrelation
+    [逻辑判断] ELSE
+      |--     [逻辑判断] IF IsRemoteTrackOutsideDecorrelationWindow==TRUE
+      |-- 调用子流程: Sub_ExecuteDecorrelation
+    [逻辑判断] ELSE
+      |-- 
+[解析流程] Sub_Manage_Automatic_Correlation_Process (Manages the entire two-step automatic correlation process.)
+调用子流程: Sub_PerformCorrelationTest
+    [逻辑判断] IF TentativeCorrelationFlag==TRUE
+      |-- 
+[解析流程] Sub_Handle_Manual_Correlation (Handles the process for manually initiated correlation.)
+    [逻辑判断] IF (Track1.E_C!=Track2.E_C)OR(Track1.Simulated!=Track2.Simulated)OR(Track1.IsRemote==TRUEANDTrack2.IsRemote==TRUE)
+      |-- 调用子流程: Atomic_Notify_Correlation_Prohibited
+      |-- 调用子流程: Sub_ExecuteFinalCorrelation
+
+[解析流程] Sub_PerformCorrelationTest (Performs a single round of correlation testing.)
+    (参数定义: (AttemptType:STRING))
+调用子流程: Atomic_CheckCorrelationProhibitions
+    [逻辑判断] IF HasProhibitions==TRUE
+      |-- 调用子流程: Atomic_CheckCorrelationRestrictions
+    [逻辑判断] IF HasRestrictions==TRUE
+      |--     [逻辑判断] IF (Context.Track_A.IsTargetInOwnUnitJ102==TRUEANDContext.Track_A.IDIN("Unknown","Hostile")ANDContext.Track_B.ID=="Friend")OR(Context.Track_B.IsTargetInOwnUnitJ102==TRUEANDContext.Track_B.IDIN("Unknown","Hostile")ANDContext.Track_A.ID=="Friend")
+      |--     -> 步骤: Own_UnitNOTIFY"INFO: Engagement exception rule applied. Overriding correlation restriction."TOOperator
+      |-- 调用子流程: Atomic_PerformPhysicalCorrelationTests
+    [逻辑判断] ELSE
+      |--     -> 步骤: Own_UnitNOTIFY"Automatic correlation restricted. Please review."TOOperator
+      |--     [逻辑判断] ELSE
+      |-- 调用子流程: Atomic_PerformPhysicalCorrelationTests
+    [逻辑判断] IF PhysicalTestPassed==TRUE
+      |--     [逻辑判断] IF AttemptType=="First Attempt"
+      |-- -> 赋值操作: TentativeCorrelationFlag = TRUE
+    [逻辑判断] ELSE
+      |-- -> 赋值操作: TentativeCorrelationFlag = FALSE
+
+[解析流程] Sub_ExecuteFinalCorrelation (Selects dropped TN, and executes the correct drop or correlation request procedure.)
+调用子流程: Sub_SelectDroppedTN
+    [逻辑判断] IF Own_Unit.HasR2ForDroppedTN==TRUE
+      |-- 调用子流程: Link16_Control_Handover_Detailed.Sub_SendMessage
+      |-- -> 赋值操作: DroppedTN_AwaitingAck = TRUE
+      |--     [逻辑判断] ELSE
+      |-- 调用子流程: Link16_Control_Handover_Detailed.Sub_SendMessage
+      |--     -> 步骤: 自然语言描述: NATURAL_LANGUAGE{INTENT"Retain Dropped TN as a remote track after initiating J7.2.";DESCRIPTION"In accordance with MIL-STD-6016B 4.4.4.3.1k(1)(c), the Dropped TN shall be retained as a remote track while awaiting the drop confirmation from the responsible unit.";}
+      |-- 
+[解析流程] Sub_SelectDroppedTN (Selects the track number to be dropped based on standard rules.)
+    [逻辑判断] IF (Context.IsEngagementExceptionActive==TRUE)
+      |--     -> 步骤: 自然语言描述: NATURAL_LANGUAGE{INTENT"Force select the Unknown/Hostile track to be dropped.";DESCRIPTION"In accordance with the engagement exception rule, the track with the ID of Unknown or Hostile shall be selected as the Dropped TN.";}
+    [逻辑判断] ELSE
+      |--     [逻辑判断] IF TrackA.HasOCC==TRUEANDTrackB.HasOCC==FALSE
+      |--     -> 步骤: 自然语言描述: NATURAL_LANGUAGE{INTENT"Assign Track B as the Dropped TN.";DESCRIPTION"Track B is selected to be dropped as it does not have an Operational Contingency Constraint, while Track A does.";}
+    [逻辑判断] ELSE IF TrackA.HasOCC==FALSEANDTrackB.HasOCC==TRUE
+      |--     -> 步骤: 自然语言描述: NATURAL_LANGUAGE{INTENT"Assign Track A as the Dropped TN.";DESCRIPTION"Track A is selected to be dropped as it does not have an Operational Contingency Constraint, while Track B does.";}
+    [逻辑判断] ELSE
+      |--     -> 步骤: 自然语言描述: NATURAL_LANGUAGE{INTENT"Determine effective track numbers for comparison.";DESCRIPTION"The effective track number for each track will be determined, using the value greater than 07777 if it is reported via a J7.4 message.";}
+      |--     [逻辑判断] IF Get_Effective_TN(Track=TrackA)>Get_Effective_TN(Track=TrackB)
+      |--     -> 步骤: 自然语言描述: NATURAL_LANGUAGE{INTENT"Assign Track A as the Dropped TN.";DESCRIPTION"Track A is selected to be dropped as its effective track number is higher.";}
+    [逻辑判断] ELSE
+      |--     -> 步骤: 自然语言描述: NATURAL_LANGUAGE{INTENT"Assign Track B as the Dropped TN.";DESCRIPTION"Track B is selected to be dropped as its effective track number is higher or equal.";}
+
+[解析流程] Sub_MigrateDataFromDroppedTN (Transfers specified data from the dropped TN to the retained TN.)
+    -> 步骤: Own_UnitNOTIFY"Correlation successful. Data migration complete."TOOperator
+
+[解析流程] Sub_ExecuteDecorrelation (Executes the decorrelation by splitting tracks and handling special conditions.)
+调用子流程: Sub_PerformCorrelationTest
+    [逻辑判断] IF TentativeCorrelationFlag==FALSE
+      |-- 调用子流程: Atomic_AssignNewTN
+      |-- -> 赋值操作: NewTN = Generated_New_TN
+      |-- 调用子流程: Link16_Control_Handover_Detailed.Sub_SendMessage
+      |-- 调用子流程: Atomic_EstablishOriginalTNAsRemote
+      |-- 调用子流程: Sub_HandleDecorrelationSpecialConditions
+    [逻辑判断] ELSE
+      |--     -> 步骤: Own_UnitNOTIFY"Decorrelation aborted. New correlation candidate found."TOOperator
+      |-- 调用子流程: Atomic_EstablishOriginalTNAsRemote
+      |-- 调用子流程: Sub_ExecuteFinalCorrelation
+
+[解析流程] Sub_HandleDecorrelationSpecialConditions (Checks and alerts operator for various operational contingencies during decorrelation.)
+    [逻辑判断] IF Track_A.IsInEngagement==TRUE
+      |--     -> 步骤: Own_UnitNOTIFY"ALERT: Decorrelated track TN A is in an active engagement. Transmit J10.2 with status 'Engagement Broken' if appropriate."TOOperator
+    [逻辑判断] IF Track_A.HasPendingCommand==TRUE
+      |--     -> 步骤: Own_UnitNOTIFY"INFO: Decorrelated track TN A has a pending J9.0 command. Display new status for both TN A and TN B before replying."TOOperator
+    [逻辑判断] IF Track_A.IsControlledByOwnUnit==TRUEANDTrack_A.TargetIsC2_JU==TRUE
+      |--     -> 步骤: Own_UnitNOTIFY"MANUAL ACTION REQUIRED: Decorrelation of controlled track TN A requires manual confirmation. Automatic decorrelation inhibited."TOOperator
+      |--     [逻辑判断] ELSE IF Track_A.IsControlledByOwnUnit==TRUEANDTrack_A.TargetIsC2_JU==FALSE
+      |--     -> 步骤: Own_UnitNOTIFY"INFO: Decorrelated track TN A (non-C2 JU) control report will be maintained."TOOperator
+    [逻辑判断] IF Track_A.IsPaired==TRUE
+      |--     -> 步骤: Own_UnitNOTIFY"ALERT: Decorrelated track TN A is paired. Terminate pairing on TN A and initiate on TN B if appropriate."TOOperator
+    [逻辑判断] IF Track_A.HasIndexNumber==TRUE
+      |--     -> 步骤: 自然语言描述: NATURAL_LANGUAGE{INTENT"Assess and re-assign Index Number.";ACTORSOwn_Unit,Operator;DATA_CONTEXT"J12.5 message associated with TN A.";DESCRIPTION"Assess whether the Index Number should remain with TN A or be transferred to TN B, and transmit J12.5 messages as appropriate.";}
+    [逻辑判断] IF Track_A.IsInHandover==TRUE
+      |-- -> 赋值操作: DecorrelationPendingFlag = TRUE
+      |--     -> 步骤: Own_UnitNOTIFY"INFO: Decorrelation is delayed until handover of TN A is complete or terminated. Status is 'Pending Decorrelation'."TOOperator
+      |-- 
+[解析流程] Atomic_Notify_Correlation_Prohibited (Notifies the operator that a correlation action was prohibited.)
+    (参数定义: (Reason:STRING))
+    -> 步骤: Own_UnitNOTIFY"Correlation is prohibited for the selected tracks."TOOperator
+
+[解析流程] Atomic_CheckCorrelationProhibitions (Checks absolute prohibitions for automatic correlation.)
+    -> 步骤: 自然语言描述: NATURAL_LANGUAGE{INTENT"Check for conditions that absolutely forbid correlation.";DESCRIPTION"Verify that tracks do not have TQ <= e, are not of different E/C, and are not a mix of simulated and live tracks. The global state 'HasProhibitions' is updated to true if any prohibition is found, otherwise false.";}
+
+[解析流程] Atomic_CheckCorrelationRestrictions (Checks non-absolute restrictions for automatic correlation.)
+    -> 步骤: 自然语言描述: NATURAL_LANGUAGE{INTENT"Check for conditions that restrict automatic correlation.";DESCRIPTION"Verify that tracks do not have conflicting IDs, different Mode II codes, are not both local, have strength > 1, have R2 conflicts, or are under Operational Contingency Constraints (OCCs). The global state 'HasRestrictions' is updated to true if any restriction is found, otherwise false.";}
+
+[解析流程] Atomic_PerformPhysicalCorrelationTests (Performs positional, velocity, and altitude tests.)
+    -> 步骤: 自然语言描述: NATURAL_LANGUAGE{INTENT"Execute kinematic and positional tests.";DESCRIPTION"Compare the position, velocity, and altitude of the local and remote tracks against the criteria defined in MIL-STD-6016B, paragraphs 4.4.4.3.1f(3) through 4.4.4.3.1f(8).";}
+
+[解析流程] Atomic_TransferKinematicData (Transfers kinematic data from dropped to retained TN.)
+    -> 步骤: 描述: "Transfer Latitude, Longitude, Course, Speed, Altitude, TQ, and Strength."
+
+[解析流程] Atomic_TransferIdentificationData (Transfers identification data.)
+    -> 步骤: 描述: "Transfer ID, Platform, Activity, etc., based on restriction inhibition status."
+
+[解析流程] Atomic_TransferIFF_SIF_Data (Transfers IFF/SIF data.)
+    -> 步骤: 描述: "Transfer non-zero Mode I/II/III data and higher value Mode IV data."
+
+[解析流程] Atomic_TransferIndicatorData (Transfers Force Tell and Emergency indicators.)
+    -> 步骤: 描述: "Transfer Force Tell and Emergency indicators if set to 1 on dropped TN."
+
+[解析流程] Atomic_AssignNewTN (Assigns a new TN to a local track and returns it.)
+    -> 步骤: 自然语言描述: NATURAL_LANGUAGE{INTENT"Generate and assign a unique new Track Number.";DESCRIPTION"The system generates a unique track number not currently in use and assigns it to the newly decorrelated local track. The resulting TN is provided via the global state 'Generated_New_TN' for retrieval.";}
+
+[解析流程] Atomic_EstablishOriginalTNAsRemote (Sets the original track as a remote track.)
+    -> 步骤: 描述: "Establish TN A as a remote track in the local system."
+------------------------------
+
+🎉 所有任务完成！
+   - 可视化图: E:\lht\模型转换\DSLParser\output\目标监视.svg
+   - 详细日志: output/目标监视解析日志.txt
+

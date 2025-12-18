@@ -1,0 +1,30 @@
+==================================================
+📂 开始解析任务: J3.2_Rules.dsl
+🕒 时间: Mon Dec 15 16:07:07 CST 2025
+--------------------------------------------------
+ℹ️ 识别模式: 消息处理规则 (Message Rules)
+✅ 语法解析通过 (Zero Syntax Errors)
+
+--- [Visitor 数据提取结果] ---
+=== 解析消息收发规则模型 ===
+
+[规则集] 针对消息: J3.2
+  |-- [发送规则组] (TransmitRules)
+      |-- 规则: Rule 1: J3.2B Basic Message Transmission
+          [条件]: Text("by the JU with R²")AND(OnEvent(SystemCue("When reporting a new air track on the interface"))OROnEvent(SystemCue("When assuming R² of an air track"))OROnEvent(SystemCue("When a track alert is initiated on the air track"))OR(TimingisPeriodic("RRN=6, 12s, 8-20s interval")ANDText("for real-time air tracks"))OR(TimingisPeriodic("RRN=4, 48s, 36-60s interval")ANDText("for non-real-time air tracks"))OR(OnEvent(SystemCue("When identity changes"))ANDText("for real-time air tracks"))OR(OnEvent(SystemCue("When any data element changes"))ANDText("for non-real-time air tracks"))OR(OnEvent(ReceiptOf("J7.1"))ANDField(J7.1.Action)==1)OR(OnEvent(SystemCue("When J2.2 Air PPLI messages are no longer being received"))ANDText("for which local sensor data exist, in accordance with paragraph 4.4.2.2.1"))OR(OnEvent(ReceiptOf("J7.5"))ANDField(J7.5.Action)==2)OROnEvent(SystemCue("When any IFF/SIF data are changed from No Data status (zero) to Valid Data status (nonzero)")))
+          [动作]: The J3.2B Air Track basic message (J3.2I and J3.2E0) shall be transmitted.
+      |-- 规则: Rule 2: J3.2C1 Continuation Word Transmission
+          [条件]: Text("by the JU with R²")AND((Text("if any data elements in the J3.2C1 word are held for real-time air tracks")AND(OnEvent(SystemCue("When reporting a new air track on the interface"))OROnEvent(SystemCue("When assuming R² of an air track"))OROnEvent(SystemCue("When a track alert is initiated on the air track"))OR(OnEvent(ReceiptOf("J7.1"))ANDField(J7.1.Action)==1)OROnEvent(SystemCue("When J2.2 Air PPLI messages are no longer being received"))))OR(OnEvent(SystemCue("when any data in the J3.2C1 word changes"))ANDText("At the next periodic transmission of the basic message"))OR(Text("Every 4th (1-8, 1) transmission of the J3.2B basic message")ANDText("for real-time air tracks"))ORText("for non-real-time air tracks")OR(OnEvent(ReceiptOf("J7.5"))ANDField(J7.5.Action)==2)ORText("When Air Platform and/or Air Platform Activity... may be sent in alternate transmissions with the Air Specific Type Indicator set to value 0 and then 1"))
+          [动作]: The J3.2C1 Air Track Amplification continuation word shall be transmitted.
+      |-- 规则: Rule 3: J3.2C4 Continuation Word Transmission
+          [条件]: Text("by the JU with R²")AND((Text("if any data elements in the J3.2C4 word are held for real-time air tracks")AND(OnEvent(SystemCue("When reporting a new air track on the interface"))OROnEvent(SystemCue("When assuming R² of an air track"))OROnEvent(SystemCue("When a track alert is initiated on the air track"))OR(OnEvent(ReceiptOf("J7.1"))ANDField(J7.1.Action)==1)OROnEvent(SystemCue("When J2.2 Air PPLI messages are no longer being received"))))OR(OnEvent(SystemCue("when any data in the J3.2C4 word changes"))ANDText("At the next periodic transmission of the basic message"))OR(Text("Every 8(1-16, 1) transmission of the J3.2B basic message for real-time air tracks")ANDText("if any data elements in the J3.2C4 word are held"))ORText("for non-real-time air tracks"))
+          [动作]: The J3.2C4 Air Track Amplification continuation word shall be transmitted.
+      |-- 规则: Rule 4: Cease Transmission
+          [条件]: OnEvent(ReceiptOf("J2.2"))ANDText("from the unit being reported once the TN correlation has been accomplished")
+          [动作]: The J3.2 messages on the specified air track shall cease being transmitted.
+------------------------------
+
+🎉 所有任务完成！
+   - 可视化图: E:\lht\模型转换\DSLParser\output\J3.2_Rules.svg
+   - 详细日志: output/J3.2_Rules解析日志.txt
+

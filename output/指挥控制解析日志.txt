@@ -1,0 +1,79 @@
+==================================================
+📂 开始解析任务: 指挥控制.dsl
+🕒 时间: Thu Dec 18 16:34:38 CST 2025
+--------------------------------------------------
+ℹ️ 识别模式: 功能模型 (Function Model)
+✅ 语法解析通过 (Zero Syntax Errors)
+
+--- [Visitor 数据提取结果] ---
+=== 解析功能模型: Link16_Control_Change_Procedures ===
+  [发现参与者] 名称: C2_JU_A, 类型: C2_JU
+  [发现参与者] 名称: C2_JU_B, 类型: C2_JU
+  [发现参与者] 名称: Aircraft, 类型: NON_C2_JU
+  [发现参与者] 名称: Operator_A, 类型: GENERIC_PLATFORM
+  [发现参与者] 名称: Operator_B, 类型: GENERIC_PLATFORM
+  [发现参与者] 名称: Aircraft_Operator, 类型: GENERIC_PLATFORM
+
+[静态定义] 消息列表 (MESSAGES):
+  - J12.4
+  - J0.3
+
+[静态定义] 枚举集合: RC_Field_Values
+  |-- Original_Order_Req_Response =0 ("Initial Order, Response Required")
+  |-- Broadcast_Request =1 ("Broadcast Request")
+  |-- Machine_Receipt =2 ("Machine Receipt")
+  |-- WILCO =3 ("Will Comply")
+  |-- HAVCO =4 ("Have Comply")
+  |-- CANTCO =6 ("Cannot Comply (Operator Decision)")
+  |-- CANTPRO =7 ("Cannot Comply (Protocol/System Error)")
+
+[静态定义] 枚举集合: CCI_Field_Values
+  |-- Control_Change_Order =0 ("Control Change Order")
+  |-- Control_Request =1 ("Control Request")
+  |-- Terminate_Control =2 ("Terminate Control")
+
+[静态定义] 全局状态: Control_Established (类型: BOOLEAN) 默认值 = FALSE
+
+[解析流程] Core_Manage_Control_Procedures (Top-level procedure to manage both initiation and handover of control by calling appropriate sub-procedures.)
+    [触发条件] "Operator_A initiates control initiation"OR"Aircraft_Operator initiates control request"OR"Operator_A initiates handover"OR"Operator_A initiates control termination"
+    [逻辑判断] IF "Event was Operator_A initiates control initiation"
+      |-- 调用子流程: Sub_C2_JU_Initiated_Handshake
+    [逻辑判断] ELSE IF "Event was Aircraft_Operator initiates control request"
+      |--     [逻辑判断] ELSE IF "Event was Operator_A initiates handover"
+      |-- 调用子流程: Link16_Control_Handover_Detailed.Sub_Handle_Assume_Control_Request
+    [逻辑判断] ELSE IF "Event was Operator_A initiates control termination"
+      |-- 调用子流程: Sub_Terminate_Control
+
+[解析流程] Sub_C2_JU_Initiated_Handshake (Handles the control initiation handshake started by a C2 JU.)
+    (参数定义: (Initiator:STRING,Target:STRING))
+调用子流程: Link16_Control_Handover_Detailed.Sub_SendMessage
+
+[解析流程] Sub_Non_C2_JU_Known_Target_Request (Handles the request when a Non-C2 JU contacts a known C2 JU.)
+    (参数定义: (Requester:STRING,Target:STRING))
+调用子流程: Link16_Control_Handover_Detailed.Sub_SendMessage
+
+[解析流程] Sub_Non_C2_JU_Broadcast_Request (Handles the broadcast request when a Non-C2 JU does not know which C2 JU to contact.)
+    (参数定义: (Requester:STRING))
+-> 赋值操作: broadcast_attempts = 0
+    [逻辑判断] IF Control_Established==FALSE
+      |-- 调用子流程: Atomic_Alert_Operator
+      |-- 
+[解析流程] Sub_Handle_Optional_Timeslot_Assignment (Handles the optional J0.3 timeslot assignment sequence.)
+    (参数定义: (Controller:STRING,Aircraft:STRING))
+    [逻辑判断] IF "Controller supports and requires J0.3 timeslot assignment"
+      |-- 调用子流程: Link16_Control_Handover_Detailed.Sub_SendMessage
+      |-- 
+[解析流程] Sub_Terminate_Control (Handles the 'Termination of Control' sequence (c).)
+    (参数定义: (Controller:STRING,Asset:STRING))
+调用子流程: Atomic_Alert_Operator
+调用子流程: Link16_Control_Handover_Detailed.Sub_SendMessage
+
+[解析流程] Atomic_Alert_Operator (Alerts a specific human operator with a message.)
+    (参数定义: (Recipient:STRING,Message:STRING))
+    -> 步骤: Own_UnitNOTIFYMessageTORecipient
+------------------------------
+
+🎉 所有任务完成！
+   - 可视化图: E:\lht\模型转换\DSLParser\output\指挥控制.svg
+   - 详细日志: output/指挥控制解析日志.txt
+
