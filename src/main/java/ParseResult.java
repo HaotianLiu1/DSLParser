@@ -9,6 +9,7 @@ public class ParseResult {
     public final String dotPath;
     public final String svgPath;
     public final String logPath;
+    public final List<SyntaxErrorDetail> syntaxErrors;
 
     public ParseResult(boolean success,
                        List<String> errors,
@@ -17,7 +18,8 @@ public class ParseResult {
                        String visitorOutput,
                        String dotPath,
                        String svgPath,
-                       String logPath) {
+                       String logPath,
+                       List<SyntaxErrorDetail> syntaxErrors) {
         this.success = success;
         this.errors = errors;
         this.errorCount = errorCount;
@@ -26,5 +28,6 @@ public class ParseResult {
         this.dotPath = dotPath;
         this.svgPath = svgPath;
         this.logPath = logPath;
+        this.syntaxErrors = syntaxErrors;
     }
 }

@@ -1,4 +1,3 @@
-import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -8,8 +7,10 @@ import java.util.List;
 
 public class ToolchainService {
     private static final String DSL_DIR = "dsl";
+    private static final String OUTPUT_DIR = "output";
     private static final Path GRAMMAR_PATH = Path.of("src", "main", "antlr4", "Link16DSL.g4");
     private static final Path LEXER_PATH = Path.of("src", "main", "antlr4", "Link16DSLLexer.g4");
+    private static final int MAX_RETRIES = 3;
 
     private final LlmClient llmClient;
 
@@ -22,32 +23,45 @@ public class ToolchainService {
     }
 
     public ToolchainResult generateAndValidate(String nlSpec, String type) {
-        String prompt = buildPrompt(nlSpec, type);
-        String dsl = llmClient.generate(prompt, type);
-        if (dsl == null || dsl.isBlank()) {
-            throw new IllegalStateException("LLM 返回空 DSL 内容。");
+        ensureDirectories();
+        String feedback = "";
+        List<GenerationAttempt> attempts = new java.util.ArrayList<>();
+        String failureReason = "";
+        String baseName = buildDslFileName(type);
+
+        for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            String prompt = buildPrompt(nlSpec, type, feedback);
+            String dsl = llmClient.generate(prompt, type);
+            if (dsl == null || dsl.isBlank()) {
+                throw new IllegalStateException("LLM 返回空 DSL 内容。");
+            }
+
+            String fileName = baseName + "-attempt-" + attempt;
+            Path dslFile = Path.of(DSL_DIR).resolve(fileName + ".dsl");
+            Path attemptCopy = Path.of(OUTPUT_DIR).resolve(fileName + ".dsl");
+            writeDslFile(dslFile, dsl);
+            writeDslFile(attemptCopy, dsl);
+
+            ParseResult parseResult = Link16ParserRunner.parseFile(dslFile.toFile());
+            writeAttemptSummary(fileName, parseResult);
+            attempts.add(new GenerationAttempt(attempt, dsl, parseResult.errors, attemptCopy.toString(), parseResult.logPath));
+
+            if (parseResult.success) {
+                return new ToolchainResult(true, dsl, parseResult.logPath, parseResult.svgPath, parseResult.errors, attempts, "");
+            }
+
+            feedback = buildSyntaxFeedback(parseResult.syntaxErrors);
+            if (feedback.isBlank()) {
+                failureReason = String.join(System.lineSeparator(), parseResult.errors);
+            } else {
+                failureReason = feedback;
+            }
         }
 
-        Path dslDir = Path.of(DSL_DIR);
-        try {
-            Files.createDirectories(dslDir);
-        } catch (IOException e) {
-            throw new IllegalStateException("无法创建 DSL 目录: " + dslDir.toAbsolutePath(), e);
-        }
-
-        String fileName = buildDslFileName(type);
-        Path dslFile = dslDir.resolve(fileName + ".dsl");
-        try {
-            Files.writeString(dslFile, dsl.trim() + System.lineSeparator(), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            throw new IllegalStateException("无法写入 DSL 文件: " + dslFile.toAbsolutePath(), e);
-        }
-
-        ParseResult parseResult = Link16ParserRunner.parseFile(dslFile.toFile());
-        return new ToolchainResult(dsl, parseResult.logPath, parseResult.svgPath, parseResult.errors);
+        return new ToolchainResult(false, "", "", "", List.of(failureReason), attempts, failureReason);
     }
 
-    private String buildPrompt(String nlSpec, String type) {
+    private String buildPrompt(String nlSpec, String type, String feedback) {
         String grammar = readResource(GRAMMAR_PATH);
         String lexer = readResource(LEXER_PATH);
         String examples = """
@@ -69,9 +83,17 @@ public class ToolchainService {
                 }
                 """;
 
+        String feedbackBlock = feedback == null || feedback.isBlank()
+                ? ""
+                : """
+                [语法错误反馈]
+                %s
+                """.formatted(feedback);
+
         return """
                 你是一个 DSL 生成助手。请根据自然语言需求生成 Link16 DSL。
                 约束: 仅输出 DSL 内容，不要附加解释。
+                必须严格满足 ANTLR Grammar/Lexer 语法约束，否则会被拒绝并要求重试。
 
                 [类型]
                 %s
@@ -84,10 +106,11 @@ public class ToolchainService {
 
                 [Few-shot]
                 %s
+                %s
 
                 [需求]
                 %s
-                """.formatted(type == null ? "" : type, grammar, lexer, examples, nlSpec == null ? "" : nlSpec);
+                """.formatted(type == null ? "" : type, grammar, lexer, examples, feedbackBlock, nlSpec == null ? "" : nlSpec);
     }
 
     private String readResource(Path path) {
@@ -102,6 +125,50 @@ public class ToolchainService {
         String base = (type == null || type.isBlank()) ? "generated" : type;
         base = base.replaceAll("[^\\p{IsAlphabetic}\\p{IsDigit}_-]+", "_");
         return base + "-" + Instant.now().toEpochMilli();
+    }
+
+    private void ensureDirectories() {
+        try {
+            Files.createDirectories(Path.of(DSL_DIR));
+            Files.createDirectories(Path.of(OUTPUT_DIR));
+        } catch (IOException e) {
+            throw new IllegalStateException("无法创建输出目录。", e);
+        }
+    }
+
+    private void writeDslFile(Path target, String dsl) {
+        try {
+            Files.writeString(target, dsl.trim() + System.lineSeparator(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new IllegalStateException("无法写入 DSL 文件: " + target.toAbsolutePath(), e);
+        }
+    }
+
+    private void writeAttemptSummary(String fileName, ParseResult parseResult) {
+        Path summaryPath = Path.of(OUTPUT_DIR).resolve(fileName + "-errors.txt");
+        StringBuilder summary = new StringBuilder();
+        summary.append("解析结果: ").append(parseResult.success ? "成功" : "失败").append(System.lineSeparator());
+        summary.append("错误数量: ").append(parseResult.errorCount).append(System.lineSeparator());
+        summary.append("错误列表:").append(System.lineSeparator());
+        for (String error : parseResult.errors) {
+            summary.append("- ").append(error).append(System.lineSeparator());
+        }
+        try {
+            Files.writeString(summaryPath, summary.toString(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new IllegalStateException("无法写入错误摘要文件: " + summaryPath.toAbsolutePath(), e);
+        }
+    }
+
+    private String buildSyntaxFeedback(List<SyntaxErrorDetail> syntaxErrors) {
+        if (syntaxErrors == null || syntaxErrors.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder("请修正以下语法错误后重新生成：\n");
+        for (SyntaxErrorDetail detail : syntaxErrors) {
+            sb.append("- ").append(detail.toPromptLine()).append("\n");
+        }
+        return sb.toString().trim();
     }
 }
 
