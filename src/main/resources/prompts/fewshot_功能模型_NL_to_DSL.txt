@@ -1,0 +1,33 @@
+NL 输入：
+为“目标监视”建一个功能模型：
+- 类型：Track 结构体含 id、speed
+- Actor：Sensor 为 NON_C2_JU，C2 为 C2_JU
+- 消息：J3.2
+- 状态：Alert 为 BOOLEAN 初始 false
+- 过程：Monitor，当收到 J3.2 且 speed > 100 时通知 C2
+
+DSL 输出：
+FUNCTION_MODEL 目标监视 {
+  TYPES {
+    Track: STRUCT {
+      id: STRING;
+      speed: FLOAT;
+    };
+  }
+  ACTORS {
+    Sensor: NON_C2_JU;
+    C2: C2_JU;
+  }
+  MESSAGES {
+    J3.2;
+  }
+  STATES {
+    Alert: BOOLEAN = FALSE;
+  }
+  PROCEDURE Monitor "Monitor fast tracks" {
+    TRIGGER MESSAGE_RECEIVED J3.2(Speed > 100) FROM Sensor;
+    STEPS {
+      STEP Sensor NOTIFY "fast track" TO C2;
+    }
+  }
+}

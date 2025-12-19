@@ -1,0 +1,20 @@
+NL 输入：
+为消息 J3.2 定义规则：
+- 接收规则：当平台角色为 C2 或者字段 Speed > 100 时，动作为“上报告警”。
+- 发送规则：当有系统提示“HighThreat”时，动作为“转发至指挥”。
+
+DSL 输出：
+MESSAGE J3.2 RULES {
+  RECEIVE_RULES {
+    RULE "fast or c2" {
+      CONDITION: PLATFORM.ROLE == "C2" OR FIELD(J3.2.Speed) > 100
+      ACTION: "上报告警"
+    }
+  }
+  TRANSMIT_RULES {
+    RULE "cue forward" {
+      CONDITION: ON_EVENT(SYSTEM_CUE("HighThreat"))
+      ACTION: "转发至指挥"
+    }
+  }
+}
