@@ -66,6 +66,7 @@ public class Link16ParserRunner {
         PrintStream originalErr = System.err;
         ByteArrayOutputStream logBuffer = new ByteArrayOutputStream();
         List<String> errors = new ArrayList<>();
+        List<SyntaxErrorDetail> syntaxErrors = new ArrayList<>();
         boolean success = false;
         String svgPath = null;
         String dotPath = null;
@@ -98,6 +99,8 @@ public class Link16ParserRunner {
                     public void syntaxError(Recognizer<?, ?> recognizer, Object offendingSymbol, int line, int charPositionInLine, String msg, RecognitionException e) {
                         String error = "❌ [语法错误] 行 " + line + ":" + charPositionInLine + " -> " + msg;
                         errors.add(error);
+                        SyntaxErrorDetail detail = SyntaxErrorDetail.fromSyntaxError(line, charPositionInLine, offendingSymbol, msg);
+                        syntaxErrors.add(detail);
                         System.err.println(error);
                     }
                 });
@@ -159,7 +162,7 @@ public class Link16ParserRunner {
         String logText = logBuffer.toString(StandardCharsets.UTF_8);
         String visitorOutput = extractVisitorOutput(logText);
         int errorCount = errors.size();
-        return new ParseResult(success, errors, errorCount, logText, visitorOutput, dotPath, svgPath, logFile.getAbsolutePath());
+        return new ParseResult(success, errors, errorCount, logText, visitorOutput, dotPath, svgPath, logFile.getAbsolutePath(), syntaxErrors);
     }
 
     // ==========================================
