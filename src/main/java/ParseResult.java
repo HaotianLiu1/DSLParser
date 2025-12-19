@@ -1,15 +1,30 @@
 import java.util.List;
 
 public class ParseResult {
-    public final String logPath;
-    public final String svgPath;
-    public final List<String> errors;
     public final boolean success;
+    public final List<String> errors;
+    public final int errorCount;
+    public final String logText;
+    public final String visitorOutput;
+    public final String dotPath;
+    public final String svgPath;
+    public final String logPath;
 
-    public ParseResult(String logPath, String svgPath, List<String> errors, boolean success) {
-        this.logPath = logPath;
-        this.svgPath = svgPath;
-        this.errors = errors;
+    public ParseResult(boolean success,
+                       List<String> errors,
+                       int errorCount,
+                       String logText,
+                       String visitorOutput,
+                       String dotPath,
+                       String svgPath,
+                       String logPath) {
         this.success = success;
+        this.errors = errors;
+        this.errorCount = errorCount;
+        this.logText = logText;
+        this.visitorOutput = visitorOutput;
+        this.dotPath = dotPath;
+        this.svgPath = svgPath;
+        this.logPath = logPath;
     }
 }
