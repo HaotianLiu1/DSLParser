@@ -27,12 +27,13 @@ public class ToolchainService {
     public ToolchainResult generateAndValidate(String nlSpec, String type) {
         ensureDirectories();
         String feedback = "";
+        String previousDsl = "";
         List<GenerationAttempt> attempts = new java.util.ArrayList<>();
         String failureReason = "";
         String baseName = buildDslFileName(type);
 
         for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-            String prompt = buildPrompt(nlSpec, type, feedback);
+            String prompt = buildPrompt(nlSpec, type, feedback, previousDsl);
             String dsl = llmClient.generate(prompt, type);
             if (dsl == null || dsl.isBlank()) {
                 throw new IllegalStateException("LLM 返回空 DSL 内容。");
@@ -53,6 +54,7 @@ public class ToolchainService {
             }
 
             feedback = buildSyntaxFeedback(parseResult.syntaxErrors);
+            previousDsl = dsl;
             if (feedback.isBlank()) {
                 failureReason = String.join(System.lineSeparator(), parseResult.errors);
             } else {
@@ -63,11 +65,21 @@ public class ToolchainService {
         return new ToolchainResult(false, "", "", "", List.of(failureReason), attempts, failureReason);
     }
 
-    private String buildPrompt(String nlSpec, String type, String feedback) {
+    private String buildPrompt(String nlSpec, String type, String feedback, String previousDsl) {
         if ("功能模型".equals(type)) {
-            return buildFunctionModelPrompt(nlSpec, feedback);
+            return buildFunctionModelPrompt(nlSpec, feedback, previousDsl);
         }
 
+        String instructionBlock = previousDsl == null || previousDsl.isBlank()
+                ? """
+                [生成要求]
+                请严格按照 Grammar/Lexer 与自然语言需求生成全新的 DSL。
+                """
+                : """
+                [修复要求]
+                请基于 [上次输出] 的 DSL 进行修复，仅针对 [语法错误反馈] 调整。
+                必须同时满足 Grammar/Lexer 与自然语言需求，输出完整修复后的 DSL。
+                """;
         String grammar = readResource(GRAMMAR_PATH);
         String lexer = readResource(LEXER_PATH);
         String examples = """
@@ -95,6 +107,12 @@ public class ToolchainService {
                 [语法错误反馈]
                 %s
                 """.formatted(feedback);
+        String previousDslBlock = previousDsl == null || previousDsl.isBlank()
+                ? ""
+                : """
+                [上次输出]
+                %s
+                """.formatted(previousDsl);
 
         return """
                 你是一个 DSL 生成助手。请根据自然语言需求生成 Link16 DSL。
@@ -102,6 +120,7 @@ public class ToolchainService {
                 必须严格满足 ANTLR Grammar/Lexer 语法约束，否则会被拒绝并要求重试。
 
                 [类型]
+                %s
                 %s
 
                 [Grammar]
@@ -113,29 +132,48 @@ public class ToolchainService {
                 [Few-shot]
                 %s
                 %s
+                %s
 
                 [需求]
                 %s
-                """.formatted(type == null ? "" : type, grammar, lexer, examples, feedbackBlock, nlSpec == null ? "" : nlSpec);
+                """.formatted(type == null ? "" : type, instructionBlock, grammar, lexer, examples, feedbackBlock, previousDslBlock, nlSpec == null ? "" : nlSpec);
     }
 
-    private String buildFunctionModelPrompt(String nlSpec, String feedback) {
+    private String buildFunctionModelPrompt(String nlSpec, String feedback, String previousDsl) {
         String basePrompt = readResource(FUNCTION_MODEL_PROMPT_PATH).trim();
+        String instructionBlock = previousDsl == null || previousDsl.isBlank()
+                ? """
+                [生成要求]
+                请严格按照 BNF 与自然语言需求生成全新的 DSL。
+                """
+                : """
+                [修复要求]
+                请基于 [上次输出] 的 DSL 进行修复，仅针对 [语法错误反馈] 调整。
+                必须同时满足 BNF 与自然语言需求，输出完整修复后的 DSL。
+                """;
         String feedbackBlock = feedback == null || feedback.isBlank()
                 ? ""
                 : """
                 [语法错误反馈]
                 %s
                 """.formatted(feedback);
+        String previousDslBlock = previousDsl == null || previousDsl.isBlank()
+                ? ""
+                : """
+                [上次输出]
+                %s
+                """.formatted(previousDsl);
 
         return """
                 %s
 
                 %s
+                %s
+                %s
 
                 [需求]
                 %s
-                """.formatted(basePrompt, feedbackBlock, nlSpec == null ? "" : nlSpec);
+                """.formatted(basePrompt, instructionBlock, feedbackBlock, previousDslBlock, nlSpec == null ? "" : nlSpec);
     }
 
     private String readResource(Path path) {
