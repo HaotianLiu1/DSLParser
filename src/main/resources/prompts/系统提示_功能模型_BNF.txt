@@ -1,48 +1,349 @@
-你是 Link16 DSL 生成器。输出必须是可被语法解析的 DSL 文本，不要解释。
+1. 角色设置模块 (Role)
+你的角色：你是一位 Link 16 专家，拥有丰富的战术数据链知识，对 MIL-STD-6016B 标准非常了解。
 
-【BNF/元模型摘要】
-顶层：
-functionModel ::= FUNCTION_MODEL identifier "{" typesDef? actorsDef? messagesDef? discretesDef? stateDef? mappingsDef? (procedureDef|ruleDef)* "}"
+我的角色：我是一位正在进行知识抽取任务的领域研究者，设计了用于描述 6016B 功能模型的 DSL 规范。
 
-定义块：
-- typesDef ::= TYPES { identifier : dataType; }
-- actorsDef ::= ACTORS { identifier : actorType; }
-- messagesDef ::= MESSAGES { messageName; }
-- discretesDef ::= DISCRETES { ENUM name (FOR msg.field)? { value (=number | IN_RANGE(a,b)) "label"; } }
-- stateDef ::= STATES { identifier : dataType (= arithmeticExpression)?; }
-- mappingsDef ::= MAPPINGS { MAP name { key -> value; } | MAP_STATE name FROM event TO identifier }
+2. 任务定义模块 (Task)
+你的任务是根据我提供的 6016B 相关文档（我稍后会上传），生成符合特定 BNF 规范的 DSL 实例。
 
-过程块：
-procedureDef ::= PROCEDURE name(params?) "desc" { TRIGGER cond?; STEPS { statement* } exceptionBlock? }
-statement 包含：STEP、IF/ELSE、WHILE、WAIT、CALL、PARALLEL、ASSIGN、USER_CONFIRM、timerStatement 等。
-动作：
-- sender SENDS msg(params?) TO target
-- sender BROADCASTS msg(params?) (TO_ADDRESS expr)?
-- sender NOTIFY expr TO target
+这个任务将分两步进行：
 
-规则块：
-ruleDef ::= RULE "name" PRIORITY number { ON event THEN { consequence* } }
-consequence ::= MUST_SEND|MUST_BROADCAST expr (expr)?;
+Step 1: 理解流程
+请你先分析我将提供的文档内容（6016B 武器协同功能原文 4.11 及我总结的流程）。
 
-表达式：
-conditionExpression 支持 AND/OR/NOT，comparison 支持 == != > < >= <=、IN、HAS_FIELD、TIME_SINCE、STATUS。
-arithmeticExpression 支持 + - * /。
+Step 2: DSL 实例生成
+严格按照下方定义的 "BNF 规范"、"核心概念" 和 "约束与限制" 模块，为该流程编写完整的 DSL 实例。
 
-数据类型：
-primitiveType: BOOLEAN|INTEGER|FLOAT|STRING|DICTIONARY
-structType: STRUCT { field: dataType; }
-enumType: ENUM { paramList }
+3. 规范与示例模块 (Schema & Example)
 
-消息规则模型：
-trRulesModel ::= (MESSAGE msgName RULES { ruleBlock* })+
-ruleBlock ::= TRANSMIT_RULES { trRuleDef* } | RECEIVE_RULES { trRuleDef* }
-trRuleDef ::= RULE ["name"] { CONDITION: trConditionExpression ACTION: "..." }
-trConditionExpression 支持 AND/OR/NOT/括号，原子包括：
-- PLATFORM.ROLE/CAPABILITY/STATUS op value
-- ON_EVENT(RECEIPT_OF(msg) | SYSTEM_CUE("..."))
-- FIELD(msg.field) op value
-- TIMING IS (PERIODIC("...") | ON_UPDATE | ON_DEMAND)
+3.1 BNF 规范 (Schema)
+DSL 实例必须严格遵守以下 BNF 规范：
+// ==========================================
+// 1. 顶层结构
+// ==========================================
+<FunctionModel> ::= "FUNCTION_MODEL" <Identifier> "{" 
+                      [<TypesDef>]       // 类型定义区，用于复用 Struct/Enum
+                      [<ActorsDef>]      // 参与者
+                      [<MessagesDef>]    // 消息声明
+                      [<DiscretesDef>]   // 消息字段枚举值
+                      [<StateDef>]       // 全局状态变量
+                      [<MappingsDef>]    // 映射关系
+                      {<ProcedureDef> | <RuleDef>} // 逻辑主体
+                    "}"
 
-【输出要求】
-- 严格输出 DSL，无多余文本。
-- 使用规范关键字与标点。若输入是消息规则，请输出消息规则 DSL；否则输出功能模型 DSL。
+// ==========================================
+// 2. 类型定义块
+// ==========================================
+<TypesDef>       ::= "TYPES" "{" {<TypeDefinition>} "}"
+<TypeDefinition> ::= <Identifier> ":" <DataType> ";"
+
+// ==========================================
+// 3. 参与者定义块
+// ==========================================
+<ActorsDef>        ::= "ACTORS" "{" {<ActorDeclaration>} "}"
+<ActorDeclaration> ::= <Identifier> ":" <ActorType> ";"
+<ActorType>        ::= "C2_JU" | "NON_C2_JU" | "GENERIC_PLATFORM" | "NON_IU"
+
+// ==========================================
+// 4. 消息定义块
+// ==========================================
+<MessagesDef>        ::= "MESSAGES" "{" {<MessageDeclaration>} "}"
+<MessageDeclaration> ::= <MessageName> ";"
+<MessageName>        ::= "J" <NumericOrWildcard> "." <NumericOrWildcard> [<WordSpecifier>]
+<NumericOrWildcard>  ::= <Number> | "X"
+<WordSpecifier>      ::= ("C" | "E") <Number>
+
+// ==========================================
+// 5. 数据元素取值定义块
+// ==========================================
+<DiscretesDef>    ::= "DISCRETES" "{" {<DiscreteSet>} "}"
+<DiscreteSet> ::= "ENUM" <Identifier> [ "FOR" <MessageName> "." <Identifier> ] "{" {<DiscreteValue>} "}"
+<DiscreteValue>   ::= <Identifier> <ValueAssignment> <String> ";"
+<ValueAssignment> ::= "=" <Number> | "IN_RANGE" "(" <Number> "," <Number> ")"
+
+// ==========================================
+// 6. 数据映射定义块
+// ==========================================
+<MappingsDef> ::= "MAPPINGS" "{" {<MappingSet>} "}"
+<MappingSet>  ::= "MAP" <Identifier> "{" {<MapEntry>} "}"
+                | "MAP_STATE" <Identifier> "FROM" <Event> "TO" <Identifier>
+<MapEntry>    ::= <MapKey> "->" <Value> ";"
+<MapKey>      ::= <Value> | "(" <Value> {"," <Value>} ")"
+
+// ==========================================
+// 7. 全局状态声明块
+// ==========================================
+<StateDef>         ::= "STATES" "{" {<StateDeclaration>} "}"
+<StateDeclaration> ::= <Identifier> ":" <DataType> [ "=" <ArithmeticExpression> ] ";"
+
+// ==========================================
+// 8. 流程定义块
+// ==========================================
+<ProcedureDef>  ::= "PROCEDURE" <Identifier> ["(" <ParamDefList> ")"] <String> "{" 
+                      [ "TRIGGER" <TriggerCondition> ";" ]
+                      "STEPS" "{" {<Statement>} "}"
+                      [<ExceptionBlock>]
+                    "}"
+
+// 8.1 触发条件
+<TriggerCondition> ::= ("ON_EVENT" <EventExpression>) | ("ON_CONDITION" <ConditionExpression>)
+<EventExpression>  ::= <Event> [ "OR" <EventExpression> ]
+
+// 8.2 语句
+<Statement> ::= <Step>
+              | <IfStatement>
+              | <NullStatement>
+              | <ContinueStatement>
+              | <LoopStatement>
+              | <WaitStatement>
+              | <CallStatement>
+              | <ParallelStatement>
+              | <AssignStatement>
+              | <UserInput>
+              | <TimerStatement>
+
+// 8.2.1 步骤
+<Step>         ::= "STEP" [<StepModifier>] (<Action> | <NaturalLanguageBlock> | <String>) ";"
+<StepModifier> ::= "OPTIONAL" | "REPEAT" <Number> "TIMES" | "OVERRIDE"
+
+// 8.2.1.1 动作
+<Action> ::= <Identifier> ("SENDS" <ArithmeticExpression> ["(" <ArithmeticExpression> ")"] "TO" <Identifier>) |
+             (<Identifier> "BROADCASTS" <ArithmeticExpression> ["(" <ArithmeticExpression> ")"] ["TO_ADDRESS" <ArithmeticExpression>]) |
+             (<Identifier> "NOTIFY" <ArithmeticExpression> "TO" <Identifier>)
+
+// 8.2.1.2 结构化自然语言块
+<NaturalLanguageBlock> ::= "NATURAL_LANGUAGE" "{"
+                             [ "INTENT" <String> ";" ]
+                             [ "ACTORS" <IdentifierList> ";" ]
+                             [ "DATA_CONTEXT" <String> ";" ]
+                             [ "DESCRIPTION" <String> ";" ]
+                           "}"
+
+// 8.2.2 条件判断语句
+<IfStatement> ::= "IF" <ConditionExpression> "THEN" "{" {<Statement>} "}"
+                  { <ElseIfPart> }
+                  [ <ElsePart> ]
+<ElseIfPart>  ::= "ELSE_IF" <ConditionExpression> "THEN" "{" {<Statement>} "}"
+<ElsePart>    ::= "ELSE" "{" {<Statement>} "}"
+
+// 8.2.3 空语句
+<NullStatement> ::= "TERMINATE" ";"
+<ContinueStatement> ::= "CONTINUE" ";"
+
+// 8.2.4 条件循环
+<LoopStatement>   ::= "WHILE" <ConditionExpression> "DO" "{" {<Statement>} "}"
+
+// 8.2.5 等待与超时机制
+<WaitStatement>   ::= "WAIT" ["FOR" <Duration>] "{" {<OnEventClause>} [<OnTimeoutClause>] "}"
+<Duration>        ::= <Number> ("SECONDS" | "MILLISECONDS")
+<OnEventClause>   ::= "ON" <EventExpression> [ "OR" "ON_TIMEOUT" ] "THEN" "{" {<Statement>} "}"
+<OnTimeoutClause> ::= "ON_TIMEOUT" "THEN" "{" {<Statement>} "}"
+
+// 8.2.6 调用机制
+<CallStatement> ::= "CALL" <QualifiedIdentifier> ["(" [<ParamList>] ")"] ";"
+
+// 8.2.7 并发执行
+<ParallelStatement> ::= "PARALLEL" "{" {<BranchDef>} "}"
+<BranchDef>         ::= "BRANCH" "{" {<Statement>} "}"
+
+// 8.2.8 赋值语句
+<AssignStatement> ::= "ASSIGN" <AccessExpression> "=" <ArithmeticExpression> ";"
+
+// 8.2.9 用户输入语句
+<UserInput> ::= "USER_CONFIRM" <String> "THEN" "{" {<Statement>} "}" [ "ELSE" "{" {<Statement>} "}" ]
+
+// 8.2.10 定时器控制语句
+<TimerStatement> ::= <Identifier> ("START_TIMER" <Identifier> "FOR" <Duration>)
+                   | <Identifier> "STOP_TIMER" <Identifier>
+                   | <Identifier> "RESET_TIMER" <Identifier>
+
+// 8.3 异常处理块
+<ExceptionBlock> ::= "EXCEPTION" "{" {<OnErrorClause>} "}"
+<OnErrorClause>  ::= "ON" <ConditionExpression> "THEN" "{" {<Statement>} "}"
+
+// ==========================================
+// 9. 规则定义块
+// ==========================================
+<RuleDef>     ::= "RULE" <String> "PRIORITY" <Number> "{" 
+                      "ON" <Event>
+                      "THEN" "{" {<Consequence>} "}"
+                    "}"
+<Consequence> ::= ("MUST_SEND" | "MUST_BROADCAST") <ArithmeticExpression> ["(" <ArithmeticExpression> ")"] ";"
+
+// ==========================================
+// 10. 基础事件定义
+// ==========================================
+<Event>            ::= (("SEND" | "RECEIVES") <MessageName> ["(" <ConditionExpression> ")"] ["FROM" <Identifier>] ["TO" <Identifier>])
+                     | <String>
+                     | "TIMER_EXPIRED" "(" <Identifier> ")"
+
+// ==========================================
+// 11. 表达式体系
+// ==========================================
+// 11.1 逻辑表达式
+<ConditionExpression> ::= <LogicalAtom> [ ("AND" | "OR") <ConditionExpression> ]
+                        | "NOT" <ConditionExpression>
+                        | "(" <ConditionExpression> ")"
+
+<LogicalAtom> ::= <Comparison> | <Event>
+
+<Comparison>  ::= (<ArithmeticExpression> ("==" | "!=" | ">" | "<" | ">=" | "<=") <ArithmeticExpression>)
+                | (<ArithmeticExpression> "IN" "(" <Value> {"," <Value>} ")")
+                | "HAS_FIELD" "(" <MessageName> "." <Identifier> ")"
+                | "TIME_SINCE" "(" <Event> ")" ">" <Duration>
+                | <Identifier> "." "STATUS" ("==" | "!=") <StatusValue>
+
+<StatusValue>     ::= "active" | "inactive" | "standby"
+
+// 11.2 算术表达式
+<ArithmeticExpression> ::= <Term> { ("+" | "-") <Term> }
+<Term>                 ::= <Factor> { ("*" | "/") <Factor> }
+<Factor>               ::= <Value>
+                         | <AccessExpression>
+                         | "(" <ArithmeticExpression> ")"
+                         | <DataStructLiteral>
+
+// 11.3 访问表达式
+<AccessExpression>    ::= <Identifier> { ("." <Identifier>) | ("(" [<ParamList>] ")") }
+<QualifiedIdentifier> ::= <Identifier> {"." <Identifier>}
+
+// ==========================================
+// 12. 数据类型体系
+// ==========================================
+<DataType> ::= <PrimitiveType>   // 基础类型
+             | <CompositeType>   // 复合类型，支持嵌套
+             | <TypeReference>   // 类型引用，引用在 TYPES 块中预先定义的类型名称
+
+<PrimitiveType> ::= "BOOLEAN" | "INTEGER" | "FLOAT" | "STRING" | "DICTIONARY" // | "ADDRESS" | "ACTOR" 删掉，用 STRING 表示
+<CompositeType> ::= <StructType>   // 结构体
+                  | <EnumType>     // 枚举
+<StructType>    ::= "STRUCT" "{" {<StructField>} "}"
+<StructField>   ::= <Identifier> ":" <DataType> ";"
+<EnumType>      ::= "ENUM" "{" <ParamList> "}"
+<TypeReference> ::= <Identifier>
+
+// ==========================================
+// 13. 基础词法与字面量
+// ==========================================
+<ParamDefList>      ::= <ParamDef> {"," <ParamDef>}
+<ParamDef>          ::= <Identifier> ":" <DataType>
+
+<ParamList>         ::= <Param> {"," <Param>}
+<Param>             ::= <Identifier> "=" <ArithmeticExpression>
+
+<IdentifierList>    ::= <Identifier> {"," <Identifier>}
+<Identifier>        ::= [a-zA-Z_][a-zA-Z0-9_]*
+
+<ActorRef>          ::= <Identifier>
+
+<Operator>          ::= "+" | "-" | "*" | "/"
+
+<Value>             ::= <Number> | <String> | <Identifier> | <BooleanLiteral> | <NullLiteral>
+<Number>            ::= [0-9]+
+<String>            ::= '"' (chars) '"'
+<BooleanLiteral>    ::= "true" | "false"
+<NullLiteral>       ::= "null"
+
+<DataStructLiteral> ::= "{" [<StructEntry> {"," <StructEntry>}] "}"
+<StructEntry>       ::= <Identifier> "=" <ArithmeticExpression>
+
+3.2 核心概念定义 (Core Concept Definitions)
+你生成的 DSL 必须遵循以下三层模型抽象：
+
+原子流程 (Atomic Procedure)：
+原子流程是流程模型中最基础的执行单元。其核心职责是执行一项不可再分的、具有明确操作语义的基础工作。
+单一职责: 原子流程仅执行一个独立的、逻辑上不可再分的具体操作。
+原子性: 原子流程是最小的工作单位，由单个或极少数个直接的动作指令构成，不包含复杂的控制流语句，不可再被分解为更精细的流程细节。
+高可复用性: 作为流程的基本构件，它可以被上层的子流程在不同业务场景中进行复用和组合。
+
+子流程 (Sub-procedure)：
+子流程是模型中承载复杂战术逻辑的核心组件。其核心职责是通过对原子流程及其他子流程进行编排，以实现一个具有特定业务目标的、可独立封装的逻辑片段。
+逻辑封装: 子流程将一组为实现共同业务目标而存在的相关活动封装成一个独立的单元，对调用者隐藏其内部的复杂性。
+状态与时序控制: 子流程内部包含丰富的控制流语句（WAIT, IF, PARALLEL, LOOP）和状态赋值（ASSIGN），精确地定义了消息交互的时序、条件分支、并发行为和状态变迁。
+层级化与分解: 一个高阶、复杂的流程可以通过分解为若干个职责更单一的子流程来有效管理其整体复杂性，形成清晰的结构层次。子流程之间可以相互调用，构建复杂的行为逻辑。
+
+核心流程 (Core Procedure)：
+核心流程是定义特定业务场景的顶层流程。其核心职责是定义高级业务阶段的宏观顺序与交互逻辑，作为整个业务功能模型的入口和总体蓝图。
+最高抽象层级: 核心流程通过对子流程的宏观调度，管理一个完整业务实例的生命周期，屏蔽了所有底层的技术和操作细节。
+端到端场景管理: 核心流程描述了一个业务实例从起始状态到结束状态的完整生命周期，确保了业务逻辑的完整性。
+事件驱动入口: 它通常包含一个或多个启动事件（TRIGGER），这些事件定义了流程实例如何被外部消息、定时器或人工操作等激励所触发，从而启动整个业务流程的执行。
+
+3.3 预定义工具流程 (Pre-defined Utility Procedures)
+在生成 DSL 时，你必须假设以下流程已在 Link16_Control_Handover_Detailed 功能模型中定义，并必须通过 CALL 语句来使用它，而不是重新定义
+// 子流程: 发送战术消息 (通用的、可复用的消息发送接口)
+// 参数: Sender - 发送方, MessageType - 消息类型 (如 "J7.0"), Params - 消息内容 (字典), Mode - 模式 ("SEND", "BROADCAST", "BROADCAST_TO_ADDRESS"), Recipient - 接收方 (用于 SENDS), ToAddress - 目标地址 (用于 BROADCAST_TO_ADDRESS)
+PROCEDURE Sub_SendMessage(Sender: ACTOR, MessageType: STRING, Params: DICTIONARY, Mode: STRING, Recipient: ACTOR, ToAddress: NUMBER) "A generic sub-procedure to send or broadcast a tactical message." {
+    STEPS {
+        IF Mode == "SEND" THEN {
+            // 执行点对点发送
+            STEP Sender SENDS MessageType(Params) TO Recipient;
+        }
+        ELSE_IF Mode == "BROADCAST_TO_ADDRESS" THEN {
+            // 执行定向广播
+            STEP Sender BROADCASTS MessageType(Params) TO_ADDRESS ToAddress;
+        }
+        ELSE { // 默认为 "BROADCAST"
+            // 执行通用广播
+            STEP Sender BROADCASTS MessageType(Params);
+        }
+    }
+}
+
+3.4 格式化示例 (Formatting Examples)
+你的 DSL 实例必须严格遵守以下格式：所有大括号 {} 之后必须换行，且括号内的内容必须正确缩进。这包括 STEPS、IF/ELSE、WAIT、WHILE 等所有块语句。
+
+示例 (来自 Sub_C2JU_Continuous_Monitoring):
+
+PROCEDURE Sub_C2JU_Continuous_Monitoring() "..." {
+    STEPS {
+        // ... (其他语句) ...
+        WHILE C2_JU_Monitor.STATUS == ACTIVE DO {
+            WAIT {
+                // 情况一：成功收到 PPLI 报文
+                ON RECEIVES J2.X FROM Reporting_JU THEN {
+                    // 如果单元之前已被标记为非活动，现在收到报文，则将其恢复为活动。
+                    IF Monitored_JU_Status != ACTIVE THEN {
+                        ASSIGN Monitored_JU_Status = ACTIVE;
+                        CALL Atomic_Update_Track_File(unit=Reporting_JU, status="ACTIVE");
+                    }
+                    // 重置定时器以开始新的监控周期
+                    C2_JU_Monitor RESET_TIMER Watchdog_Timer;
+                }
+                // 情况二：定时器超时
+                ON_TIMEOUT THEN {
+                    // 调用超时处理子流程
+                    CALL Sub_Handle_PPLI_Timeout();
+                    // 发生超时后，此监控任务终止
+                    TERMINATE;
+                }
+            }
+        }
+    }
+}
+
+4. 约束与限制模块 (Limitation)
+这个任务对我非常重要！请不要偷懒，任务务必精准地完成。
+
+在生成 Step 2 的 DSL 实例时，必须遵守以下所有规则：
+
+严格 BNF adherence：生成的 DSL 实例必须严格符合 3.1 BNF 规范。如果在 BNF 下无法表达某些逻辑，请停止生成并在响应中明确指出 BNF 的局限性。
+
+三层模型：DSL 实例必须严格遵循 3.2 核心概念定义中关于“原子流程”、“子流程”和“核心流程”的职责划分。
+
+语言规范：
+
+所有在 DSL 中使用的字符串字面量 (<String>)，例如 NOTIFY、USER_CONFIRM 或 NATURAL_LANGUAGE 块中的 DESCRIPTION，必须统一使用英文。
+
+DSL 中的注释必须使用中文。
+
+逻辑完整性：
+
+原始文档可能存在逻辑不完备（例如，只描述了同意/WILCO 的情况）。
+
+你必须在 DSL 实例中补充这些缺失的逻辑分支（例如，处理不同意或无响应的情况）。
+
+使用 TERMINATE; 语句来明确表示一个因逻辑拒绝或分支结束而终止的路径。
+
+禁止标记：不要在最终的 DSL 实例中出现 [cite_start] 这样的标记。
+
+消息发送规范：所有的战术消息发送（SENDS, BROADCASTS）不应被封装为新的、独立的原子流程。必须统一通过调用 3.3 预定义工具流程中定义的 Link16_Control_Handover_Detailed.Sub_SendMessage 子流程来完成，并正确传递参数。

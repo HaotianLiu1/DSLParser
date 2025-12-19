@@ -10,6 +10,8 @@ public class ToolchainService {
     private static final String OUTPUT_DIR = "output";
     private static final Path GRAMMAR_PATH = Path.of("src", "main", "antlr4", "Link16DSL.g4");
     private static final Path LEXER_PATH = Path.of("src", "main", "antlr4", "Link16DSLLexer.g4");
+    private static final Path FUNCTION_MODEL_PROMPT_PATH = Path.of(
+            "src", "main", "resources", "prompts", "系统提示_功能模型_BNF.txt");
     private static final int MAX_RETRIES = 3;
 
     private final LlmClient llmClient;
@@ -62,6 +64,10 @@ public class ToolchainService {
     }
 
     private String buildPrompt(String nlSpec, String type, String feedback) {
+        if ("功能模型".equals(type)) {
+            return buildFunctionModelPrompt(nlSpec, feedback);
+        }
+
         String grammar = readResource(GRAMMAR_PATH);
         String lexer = readResource(LEXER_PATH);
         String examples = """
@@ -111,6 +117,25 @@ public class ToolchainService {
                 [需求]
                 %s
                 """.formatted(type == null ? "" : type, grammar, lexer, examples, feedbackBlock, nlSpec == null ? "" : nlSpec);
+    }
+
+    private String buildFunctionModelPrompt(String nlSpec, String feedback) {
+        String basePrompt = readResource(FUNCTION_MODEL_PROMPT_PATH).trim();
+        String feedbackBlock = feedback == null || feedback.isBlank()
+                ? ""
+                : """
+                [语法错误反馈]
+                %s
+                """.formatted(feedback);
+
+        return """
+                %s
+
+                %s
+
+                [需求]
+                %s
+                """.formatted(basePrompt, feedbackBlock, nlSpec == null ? "" : nlSpec);
     }
 
     private String readResource(Path path) {
