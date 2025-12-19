@@ -19,7 +19,7 @@ public class ToolchainService {
     }
 
     public ToolchainService() {
-        this(new DefaultLlmClient());
+        this(new OpenAiLlmClient());
     }
 
     public ToolchainResult generateAndValidate(String nlSpec, String type) {
@@ -169,12 +169,5 @@ public class ToolchainService {
             sb.append("- ").append(detail.toPromptLine()).append("\n");
         }
         return sb.toString().trim();
-    }
-}
-
-class DefaultLlmClient implements LlmClient {
-    @Override
-    public String generate(String prompt, String type) {
-        throw new IllegalStateException("未配置 LLM 客户端，请注入实际实现。");
     }
 }
