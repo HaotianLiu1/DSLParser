@@ -50,114 +50,116 @@ public class Link16ParserRunner {
     }
 
     public static ParseResult parseFile(File inputFile) {
+        return run(inputFile);
+    }
+
+    public static ParseResult run(File inputFile) {
         setupDirectories();
 
         String baseName = getBaseName(inputFile.getName());
         File logFile = new File(OUTPUT_DIR_NAME, baseName + "解析日志.txt");
+        File dotFile = new File(OUTPUT_DIR_NAME, baseName + ".dot");
+        File svgFile = new File(OUTPUT_DIR_NAME, baseName + ".svg");
 
         // 保存原始控制台流
         PrintStream originalOut = System.out;
         PrintStream originalErr = System.err;
+        ByteArrayOutputStream logBuffer = new ByteArrayOutputStream();
+        List<String> errors = new ArrayList<>();
+        boolean success = false;
+        String svgPath = null;
+        String dotPath = null;
 
         // 开启双路输出 (控制台 + 日志文件)
-        try (TeePrintStream teeOut = new TeePrintStream(originalOut, logFile);
-             TeePrintStream teeErr = new TeePrintStream(originalErr, logFile)) {
+        try (PrintStream logFileStream = new PrintStream(new FileOutputStream(logFile), true, StandardCharsets.UTF_8);
+             PrintStream logBufferStream = new PrintStream(logBuffer, true, StandardCharsets.UTF_8)) {
+            MultiPrintStream teeOut = new MultiPrintStream(originalOut, logFileStream, logBufferStream);
+            MultiPrintStream teeErr = new MultiPrintStream(originalErr, logFileStream, logBufferStream);
 
             System.setOut(teeOut);
             System.setErr(teeErr);
 
             // === 核心处理 ===
-            ParseResult result = processSingleFile(inputFile, baseName, logFile);
-            return new ParseResult(logFile.getAbsolutePath(), result.svgPath, result.errors, result.success);
+            System.out.println("==================================================");
+            System.out.println("📂 开始解析任务: " + inputFile.getName());
+            System.out.println("🕒 时间: " + new java.util.Date());
+            System.out.println("--------------------------------------------------");
 
+            try {
+                // ANTLR 解析准备
+                CharStream input = CharStreams.fromFileName(inputFile.getAbsolutePath());
+                Link16DSLLexer lexer = new Link16DSLLexer(input);
+                CommonTokenStream tokens = new CommonTokenStream(lexer);
+                Link16DSLParser parser = new Link16DSLParser(tokens);
+
+                parser.removeErrorListeners();
+                parser.addErrorListener(new BaseErrorListener() {
+                    @Override
+                    public void syntaxError(Recognizer<?, ?> recognizer, Object offendingSymbol, int line, int charPositionInLine, String msg, RecognitionException e) {
+                        String error = "❌ [语法错误] 行 " + line + ":" + charPositionInLine + " -> " + msg;
+                        errors.add(error);
+                        System.err.println(error);
+                    }
+                });
+
+                ParseTree tree;
+                String modeName;
+
+                // 🧠 智能模式识别逻辑
+                // 只要文件名包含 "规则" 或 "Rules"，就自动切换到消息规则解析模式
+                if (inputFile.getName().contains("规则") || inputFile.getName().contains("Rules")) {
+                    modeName = "消息处理规则 (Message Rules)";
+                    System.out.println("ℹ️ 识别模式: " + modeName);
+                    tree = parser.trRulesModel(); // 调用新入口
+                } else {
+                    modeName = "功能模型 (Function Model)";
+                    System.out.println("ℹ️ 识别模式: " + modeName);
+                    tree = parser.functionModel(); // 调用旧入口
+                }
+
+                // 结果判定
+                if (parser.getNumberOfSyntaxErrors() == 0) {
+                    System.out.println("✅ 语法解析通过 (Zero Syntax Errors)");
+
+                    // 1. 调用 Visitor 提取数据
+                    System.out.println("\n--- [Visitor 数据提取结果] ---");
+                    Link16ModelVisitor visitor = new Link16ModelVisitor();
+                    visitor.visit(tree);
+                    System.out.println("------------------------------\n");
+
+                    // 2. 生成 DOT
+                    generateDotFile(tree, parser, dotFile);
+                    dotPath = dotFile.getAbsolutePath();
+
+                    // 3. 转换为 SVG
+                    convertDotToSvg(dotFile, svgFile);
+                    svgPath = svgFile.getAbsolutePath();
+
+                    System.out.println("🎉 所有任务完成！");
+                    System.out.println("   - 可视化图: " + svgFile.getAbsolutePath());
+                    System.out.println("   - 详细日志: " + logFile.getAbsolutePath());
+                    success = true;
+                } else {
+                    System.err.println("⛔ 解析失败，跳过后续步骤。");
+                }
+
+            } catch (IOException e) {
+                System.err.println("❌ 文件读取异常: " + e.getMessage());
+                errors.add("文件读取异常: " + e.getMessage());
+            }
+            System.out.println();
         } catch (Exception e) {
             e.printStackTrace();
-            List<String> errors = new ArrayList<>();
             errors.add("解析异常: " + e.getMessage());
-            return new ParseResult(logFile.getAbsolutePath(), null, errors, false);
         } finally {
             // 恢复控制台
             System.setOut(originalOut);
             System.setErr(originalErr);
         }
-    }
-
-    /**
-     * 处理单个文件的完整流程 (含智能模式识别)
-     */
-    private static ParseResult processSingleFile(File inputFile, String baseName, File logFile) {
-        System.out.println("==================================================");
-        System.out.println("📂 开始解析任务: " + inputFile.getName());
-        System.out.println("🕒 时间: " + new java.util.Date());
-        System.out.println("--------------------------------------------------");
-
-        File dotFile = new File(OUTPUT_DIR_NAME, baseName + ".dot");
-        File svgFile = new File(OUTPUT_DIR_NAME, baseName + ".svg");
-        List<String> errors = new ArrayList<>();
-
-        try {
-            // ANTLR 解析准备
-            CharStream input = CharStreams.fromFileName(inputFile.getAbsolutePath());
-            Link16DSLLexer lexer = new Link16DSLLexer(input);
-            CommonTokenStream tokens = new CommonTokenStream(lexer);
-            Link16DSLParser parser = new Link16DSLParser(tokens);
-
-            parser.removeErrorListeners();
-            parser.addErrorListener(new BaseErrorListener() {
-                @Override
-                public void syntaxError(Recognizer<?, ?> recognizer, Object offendingSymbol, int line, int charPositionInLine, String msg, RecognitionException e) {
-                    String error = "❌ [语法错误] 行 " + line + ":" + charPositionInLine + " -> " + msg;
-                    errors.add(error);
-                    System.err.println(error);
-                }
-            });
-
-            ParseTree tree;
-            String modeName;
-
-            // 🧠 智能模式识别逻辑
-            // 只要文件名包含 "规则" 或 "Rules"，就自动切换到消息规则解析模式
-            if (inputFile.getName().contains("规则") || inputFile.getName().contains("Rules")) {
-                modeName = "消息处理规则 (Message Rules)";
-                System.out.println("ℹ️ 识别模式: " + modeName);
-                tree = parser.trRulesModel(); // 调用新入口
-            } else {
-                modeName = "功能模型 (Function Model)";
-                System.out.println("ℹ️ 识别模式: " + modeName);
-                tree = parser.functionModel(); // 调用旧入口
-            }
-
-            // 结果判定
-            if (parser.getNumberOfSyntaxErrors() == 0) {
-                System.out.println("✅ 语法解析通过 (Zero Syntax Errors)");
-
-                // 1. 调用 Visitor 提取数据
-                System.out.println("\n--- [Visitor 数据提取结果] ---");
-                Link16ModelVisitor visitor = new Link16ModelVisitor();
-                visitor.visit(tree);
-                System.out.println("------------------------------\n");
-
-                // 2. 生成 DOT
-                generateDotFile(tree, parser, dotFile);
-
-                // 3. 转换为 SVG
-                convertDotToSvg(dotFile, svgFile);
-
-                System.out.println("🎉 所有任务完成！");
-                System.out.println("   - 可视化图: " + svgFile.getAbsolutePath());
-                System.out.println("   - 详细日志: " + logFile.getAbsolutePath());
-                return new ParseResult(logFile.getAbsolutePath(), svgFile.getAbsolutePath(), errors, true);
-            } else {
-                System.err.println("⛔ 解析失败，跳过后续步骤。");
-                return new ParseResult(logFile.getAbsolutePath(), null, errors, false);
-            }
-
-        } catch (IOException e) {
-            System.err.println("❌ 文件读取异常: " + e.getMessage());
-            errors.add("文件读取异常: " + e.getMessage());
-        }
-        System.out.println();
-        return new ParseResult(logFile.getAbsolutePath(), null, errors, false);
+        String logText = logBuffer.toString(StandardCharsets.UTF_8);
+        String visitorOutput = extractVisitorOutput(logText);
+        int errorCount = errors.size();
+        return new ParseResult(success, errors, errorCount, logText, visitorOutput, dotPath, svgPath, logFile.getAbsolutePath());
     }
 
     // ==========================================
@@ -251,24 +253,53 @@ public class Link16ParserRunner {
         }
     }
 
-    // 双路输出流辅助类
-    static class TeePrintStream extends PrintStream {
-        private final PrintStream consoleStream;
-        public TeePrintStream(PrintStream consoleStream, File logFile) throws FileNotFoundException {
-            super(new FileOutputStream(logFile), true, StandardCharsets.UTF_8);
-            this.consoleStream = consoleStream;
+    private static String extractVisitorOutput(String logText) {
+        String startMarker = "--- [Visitor 数据提取结果] ---";
+        String endMarker = "------------------------------";
+        int start = logText.indexOf(startMarker);
+        if (start < 0) {
+            return "";
         }
-        @Override public void write(byte[] buf, int off, int len) {
-            super.write(buf, off, len);
-            consoleStream.write(buf, off, len);
+        int contentStart = logText.indexOf("\n", start + startMarker.length());
+        if (contentStart < 0) {
+            return "";
         }
-        @Override public void write(int b) {
-            super.write(b);
-            consoleStream.write(b);
+        contentStart += 1;
+        int end = logText.indexOf(endMarker, contentStart);
+        if (end < 0) {
+            end = logText.length();
         }
-        @Override public void flush() {
-            super.flush();
-            consoleStream.flush();
+        return logText.substring(contentStart, end).trim();
+    }
+
+    // 多路输出流辅助类
+    static class MultiPrintStream extends PrintStream {
+        private final List<PrintStream> streams;
+
+        public MultiPrintStream(PrintStream... streams) {
+            super(OutputStream.nullOutputStream(), true, StandardCharsets.UTF_8);
+            this.streams = Arrays.asList(streams);
+        }
+
+        @Override
+        public void write(byte[] buf, int off, int len) {
+            for (PrintStream stream : streams) {
+                stream.write(buf, off, len);
+            }
+        }
+
+        @Override
+        public void write(int b) {
+            for (PrintStream stream : streams) {
+                stream.write(b);
+            }
+        }
+
+        @Override
+        public void flush() {
+            for (PrintStream stream : streams) {
+                stream.flush();
+            }
         }
     }
 }
