@@ -12,8 +12,10 @@ import java.nio.charset.StandardCharsets;
 
 public class OpenAiLlmClient implements LlmClient {
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    private static final String DEFAULT_API_BASE = "https://api.openai.com/v1";
-    private static final String DEFAULT_MODEL = "gpt-4o-mini";
+    private static final String DEFAULT_API_BASE = "https://ark.cn-beijing.volces.com/api/v3";
+    private static final String DEFAULT_MODEL = "deepseek-v3-2-251201";
+    // 直接写死本地测试用的 Key，不建议提交到版本库
+    private static final String DEFAULT_API_KEY = "f6b02c3d-8e22-45d9-a05d-5bf13d6ff2b9";
 
     private final HttpClient httpClient;
     private final String apiKey;
@@ -22,16 +24,16 @@ public class OpenAiLlmClient implements LlmClient {
 
     public OpenAiLlmClient() {
         this(HttpClient.newHttpClient(),
-                readRequiredEnv("OPENAI_API_KEY"),
+                readRequiredEnvOrDefault("OPENAI_API_KEY", DEFAULT_API_KEY),
                 readOptionalEnv("OPENAI_API_BASE", DEFAULT_API_BASE),
                 readOptionalEnv("OPENAI_MODEL", DEFAULT_MODEL));
     }
 
     public OpenAiLlmClient(HttpClient httpClient, String apiKey, String apiBase, String model) {
         this.httpClient = httpClient;
-        this.apiKey = apiKey;
-        this.apiBase = apiBase;
-        this.model = model;
+        this.apiKey = apiKey == null ? "" : apiKey.trim();
+        this.apiBase = apiBase == null ? DEFAULT_API_BASE : apiBase.trim();
+        this.model = model == null ? DEFAULT_MODEL : model.trim();
     }
 
     @Override
@@ -79,7 +81,7 @@ public class OpenAiLlmClient implements LlmClient {
         if (value == null || value.isBlank()) {
             throw new IllegalStateException("缺少环境变量: " + name);
         }
-        return value;
+        return value.trim();
     }
 
     private static String readOptionalEnv(String name, String defaultValue) {
@@ -87,6 +89,17 @@ public class OpenAiLlmClient implements LlmClient {
         if (value == null || value.isBlank()) {
             return defaultValue;
         }
-        return value;
+        return value.trim();
+    }
+
+    private static String readRequiredEnvOrDefault(String name, String defaultValue) {
+        String value = System.getenv(name);
+        if (value != null && !value.isBlank()) {
+            return value.trim();
+        }
+        if (defaultValue == null || defaultValue.isBlank()) {
+            throw new IllegalStateException("缺少环境变量: " + name + "，且未在代码中设置默认值");
+        }
+        return defaultValue.trim();
     }
 }
