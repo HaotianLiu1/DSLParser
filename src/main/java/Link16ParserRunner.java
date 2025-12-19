@@ -45,37 +45,47 @@ public class Link16ParserRunner {
 
         // 2. 循环处理
         for (File dslFile : filesToProcess) {
-            String baseName = getBaseName(dslFile.getName());
-            File logFile = new File(OUTPUT_DIR_NAME, baseName + "解析日志.txt");
+            parseFile(dslFile);
+        }
+    }
 
-            // 保存原始控制台流
-            PrintStream originalOut = System.out;
-            PrintStream originalErr = System.err;
+    public static ParseResult parseFile(File inputFile) {
+        setupDirectories();
 
-            // 开启双路输出 (控制台 + 日志文件)
-            try (TeePrintStream teeOut = new TeePrintStream(originalOut, logFile);
-                 TeePrintStream teeErr = new TeePrintStream(originalErr, logFile)) {
+        String baseName = getBaseName(inputFile.getName());
+        File logFile = new File(OUTPUT_DIR_NAME, baseName + "解析日志.txt");
 
-                System.setOut(teeOut);
-                System.setErr(teeErr);
+        // 保存原始控制台流
+        PrintStream originalOut = System.out;
+        PrintStream originalErr = System.err;
 
-                // === 核心处理 ===
-                processSingleFile(dslFile, baseName);
+        // 开启双路输出 (控制台 + 日志文件)
+        try (TeePrintStream teeOut = new TeePrintStream(originalOut, logFile);
+             TeePrintStream teeErr = new TeePrintStream(originalErr, logFile)) {
 
-            } catch (Exception e) {
-                e.printStackTrace();
-            } finally {
-                // 恢复控制台
-                System.setOut(originalOut);
-                System.setErr(originalErr);
-            }
+            System.setOut(teeOut);
+            System.setErr(teeErr);
+
+            // === 核心处理 ===
+            ParseResult result = processSingleFile(inputFile, baseName, logFile);
+            return new ParseResult(logFile.getAbsolutePath(), result.svgPath, result.errors, result.success);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            List<String> errors = new ArrayList<>();
+            errors.add("解析异常: " + e.getMessage());
+            return new ParseResult(logFile.getAbsolutePath(), null, errors, false);
+        } finally {
+            // 恢复控制台
+            System.setOut(originalOut);
+            System.setErr(originalErr);
         }
     }
 
     /**
      * 处理单个文件的完整流程 (含智能模式识别)
      */
-    private static void processSingleFile(File inputFile, String baseName) {
+    private static ParseResult processSingleFile(File inputFile, String baseName, File logFile) {
         System.out.println("==================================================");
         System.out.println("📂 开始解析任务: " + inputFile.getName());
         System.out.println("🕒 时间: " + new java.util.Date());
@@ -83,6 +93,7 @@ public class Link16ParserRunner {
 
         File dotFile = new File(OUTPUT_DIR_NAME, baseName + ".dot");
         File svgFile = new File(OUTPUT_DIR_NAME, baseName + ".svg");
+        List<String> errors = new ArrayList<>();
 
         try {
             // ANTLR 解析准备
@@ -95,7 +106,9 @@ public class Link16ParserRunner {
             parser.addErrorListener(new BaseErrorListener() {
                 @Override
                 public void syntaxError(Recognizer<?, ?> recognizer, Object offendingSymbol, int line, int charPositionInLine, String msg, RecognitionException e) {
-                    System.err.println("❌ [语法错误] 行 " + line + ":" + charPositionInLine + " -> " + msg);
+                    String error = "❌ [语法错误] 行 " + line + ":" + charPositionInLine + " -> " + msg;
+                    errors.add(error);
+                    System.err.println(error);
                 }
             });
 
@@ -132,15 +145,19 @@ public class Link16ParserRunner {
 
                 System.out.println("🎉 所有任务完成！");
                 System.out.println("   - 可视化图: " + svgFile.getAbsolutePath());
-                System.out.println("   - 详细日志: output/" + baseName + "解析日志.txt");
+                System.out.println("   - 详细日志: " + logFile.getAbsolutePath());
+                return new ParseResult(logFile.getAbsolutePath(), svgFile.getAbsolutePath(), errors, true);
             } else {
                 System.err.println("⛔ 解析失败，跳过后续步骤。");
+                return new ParseResult(logFile.getAbsolutePath(), null, errors, false);
             }
 
         } catch (IOException e) {
             System.err.println("❌ 文件读取异常: " + e.getMessage());
+            errors.add("文件读取异常: " + e.getMessage());
         }
         System.out.println();
+        return new ParseResult(logFile.getAbsolutePath(), null, errors, false);
     }
 
     // ==========================================
